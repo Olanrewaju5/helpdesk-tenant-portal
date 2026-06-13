@@ -76,6 +76,7 @@ const Icon = ({ name, size = 16, stroke = 1.6, ...rest }) => {
     case "smile": return <svg {...props}><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9.5h.01M15 9.5h.01"/></svg>;
     case "sparkles": return <svg {...props}><path d="M12 3v3M12 18v3M5 12H2M22 12h-3M18.4 5.6l-2 2M7.6 16.4l-2 2M18.4 18.4l-2-2M7.6 7.6l-2-2"/></svg>;
     case "history": return <svg {...props}><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>;
+    case "org": return <svg {...props}><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v3M6 16v-2h12v2M12 11v3"/></svg>;
     case "tag": return <svg {...props}><path d="m20 12-8 8a2 2 0 0 1-2.8 0L3 13.8a2 2 0 0 1-.5-1.3V5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.3.5L20 9.2a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1"/></svg>;
     case "download": return <svg {...props}><path d="M12 3v12M6 9l6 6 6-6M4 21h16"/></svg>;
     case "external": return <svg {...props}><path d="M7 17 17 7M9 7h8v8"/></svg>;
@@ -1136,9 +1137,70 @@ const TENANT = {
     { perm: "View audit logs", agent: false, manager: false, admin: true, owner: true, viewer: true },
     { perm: "View license usage", agent: false, manager: false, admin: true, owner: true, viewer: false },
   ],
+  // ── Permission catalog (drives role management + matrix) ──
+  permCatalog: [
+    { id: "ticket-view", label: "View own tickets", group: "Tickets" },
+    { id: "ticket-create", label: "Create tickets", group: "Tickets" },
+    { id: "ticket-assign", label: "Assign tickets", group: "Tickets" },
+    { id: "ticket-note", label: "Add internal note", group: "Tickets" },
+    { id: "ticket-reply", label: "Reply to customer", group: "Tickets" },
+    { id: "ticket-status", label: "Update ticket status", group: "Tickets" },
+    { id: "ticket-archive", label: "Archive tickets", group: "Tickets" },
+    { id: "ticket-escalate", label: "Escalate tickets", group: "Tickets" },
+    { id: "manage-customers", label: "Manage customers", group: "Customers & products" },
+    { id: "manage-products", label: "Manage products & services", group: "Customers & products" },
+    { id: "manage-users", label: "Manage users & roles", group: "Administration" },
+    { id: "config-forms", label: "Configure ticket forms", group: "Administration" },
+    { id: "view-audit", label: "View audit logs", group: "Administration" },
+    { id: "view-license", label: "View license usage", group: "Administration" },
+    { id: "view-reports", label: "View reports", group: "Reporting" },
+  ],
+  // ── Role definitions (system roles + any custom ones) ──
+  roleDefs: [
+    { key: "owner", name: "Client Owner", desc: "Full control of the workspace, billing and every setting.", system: true, perms: ["ticket-view","ticket-create","ticket-assign","ticket-note","ticket-reply","ticket-status","ticket-archive","ticket-escalate","manage-customers","manage-products","manage-users","config-forms","view-audit","view-license","view-reports"] },
+    { key: "admin", name: "Client Administrator", desc: "Manage tickets, customers, products, users and configuration.", system: true, perms: ["ticket-view","ticket-create","ticket-assign","ticket-note","ticket-reply","ticket-status","ticket-archive","ticket-escalate","manage-customers","manage-products","manage-users","config-forms","view-audit","view-license","view-reports"] },
+    { key: "manager", name: "Support Manager", desc: "Run the support queue — assign, escalate and report on tickets.", system: true, perms: ["ticket-view","ticket-create","ticket-assign","ticket-note","ticket-reply","ticket-status","ticket-archive","ticket-escalate","view-reports"] },
+    { key: "agent", name: "Support Agent", desc: "Work assigned tickets, reply to customers and add internal notes.", system: true, perms: ["ticket-view","ticket-create","ticket-note","ticket-reply","ticket-status"] },
+    { key: "viewer", name: "Viewer / Auditor", desc: "Read-only access to tickets, reports and the audit trail.", system: true, perms: ["ticket-view","view-reports","view-audit"] },
+  ],
+  // ── Escalation hierarchy (level 1 = front line, ascending to leadership) ──
+  hierarchy: [
+    { level: 1, title: "Support Agent", name: "Mubarak Adewale", email: "mubarak@peerless.io" },
+    { level: 2, title: "Support Manager", name: "Ify Nwosu", email: "ify@peerless.io" },
+    { level: 3, title: "Head of Support", name: "Chioma Okafor", email: "chioma@peerless.io" },
+    { level: 4, title: "Director of Operations", name: "Chisom Obi", email: "chisom@peerless.io" },
+  ],
+  // ── Audit trail backlog (newest first) ──
+  audit: [
+    { id: "AUD-2051", ts: "25 May 2026, 10:47", actor: "Mubarak Adewale", action: "Added an internal note to TKT-1042", target: "TKT-1042", type: "reply" },
+    { id: "AUD-2050", ts: "25 May 2026, 10:45", actor: "Mubarak Adewale", action: "Replied to customer on TKT-1042", target: "TKT-1042", type: "reply" },
+    { id: "AUD-2049", ts: "25 May 2026, 10:44", actor: "Mubarak Adewale", action: "Changed status of TKT-1042 to In Progress", target: "TKT-1042", type: "updated" },
+    { id: "AUD-2048", ts: "25 May 2026, 10:30", actor: "Ify Nwosu", action: "Assigned TKT-1042 to Mubarak Adewale", target: "TKT-1042", type: "assigned" },
+    { id: "AUD-2047", ts: "25 May 2026, 09:14", actor: "System", action: "Created ticket TKT-1042 from customer email", target: "TKT-1042", type: "created" },
+    { id: "AUD-2046", ts: "25 May 2026, 08:55", actor: "Nnamdi Eze", action: "Signed in from Lagos, NG", target: null, type: "auth" },
+    { id: "AUD-2045", ts: "25 May 2026, 08:02", actor: "System", action: "Created ticket TKT-1041 from customer email", target: "TKT-1041", type: "created" },
+    { id: "AUD-2044", ts: "24 May 2026, 17:32", actor: "Nnamdi Eze", action: "Invited adaeze@peerless.io as Support Agent", target: null, type: "user" },
+    { id: "AUD-2043", ts: "24 May 2026, 17:10", actor: "Qudus Salawu", action: "Changed status of TKT-1040 to Pending Customer", target: "TKT-1040", type: "updated" },
+    { id: "AUD-2042", ts: "24 May 2026, 15:30", actor: "Aminu Bello", action: "Created ticket TKT-1040", target: "TKT-1040", type: "created" },
+    { id: "AUD-2041", ts: "24 May 2026, 11:18", actor: "Ify Nwosu", action: "Escalated TKT-1039 to Head of Support", target: "TKT-1039", type: "escalated" },
+    { id: "AUD-2040", ts: "24 May 2026, 09:20", actor: "Mubarak Adewale", action: "Changed status of TKT-1039 to Open", target: "TKT-1039", type: "updated" },
+    { id: "AUD-2039", ts: "23 May 2026, 16:40", actor: "Nnamdi Eze", action: 'Updated permissions for role "Support Manager"', target: null, type: "role" },
+    { id: "AUD-2038", ts: "23 May 2026, 16:00", actor: "Qudus Salawu", action: "Changed status of TKT-1038 to Resolved", target: "TKT-1038", type: "updated" },
+    { id: "AUD-2037", ts: "23 May 2026, 14:05", actor: "Chisom Obi", action: 'Created role "Billing Specialist"', target: null, type: "role" },
+    { id: "AUD-2036", ts: "23 May 2026, 11:02", actor: "Nnamdi Eze", action: "Updated customer Sterling MFB", target: "STR-002", type: "updated" },
+    { id: "AUD-2035", ts: "22 May 2026, 18:44", actor: "System", action: "Blocked ticket creation — customer limit reached", target: null, type: "security" },
+    { id: "AUD-2034", ts: "22 May 2026, 14:10", actor: "Yetunde Lawal", action: "Created ticket TKT-1038", target: "TKT-1038", type: "created" },
+    { id: "AUD-2033", ts: "21 May 2026, 12:00", actor: "Mubarak Adewale", action: "Archived TKT-1037", target: "TKT-1037", type: "archived" },
+    { id: "AUD-2032", ts: "20 May 2026, 09:30", actor: "Chika Nnaji", action: "Exported the audit trail (CSV)", target: null, type: "auth" },
+    { id: "AUD-2031", ts: "18 May 2026, 10:15", actor: "Nnamdi Eze", action: "Archived user ex@peerless.io", target: null, type: "user" },
+    { id: "AUD-2030", ts: "15 May 2026, 08:48", actor: "Nnamdi Eze", action: 'Added product/service "Kusala"', target: "KS-004", type: "created" },
+  ],
 };
 
 const todayStr = () => new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+const tsNow = () => `${todayStr()}, ${fmtTime(new Date())}`;
+let _auditSeq = 9000;
+const auditEntry = (action, target, type, actor = "Nnamdi Eze") => ({ id: "AUD-" + (++_auditSeq), ts: tsNow(), actor, action, target: target || null, type });
 
 const STATUS_LIST = ["New", "Open", "In Progress", "Pending Customer", "Resolved", "Closed"];
 const PRIORITY_LIST = ["Low", "Medium", "High", "Critical"];
@@ -1229,10 +1291,73 @@ const TenantStoreProvider = ({ children }) => {
     setData((d) => ({ ...d, users: d.users.map((u) => u.email === email ? { ...u, ...patch } : u) }));
   }, []);
 
+  // ── Audit trail (live capture) ──
+  const addAudit = useCallback((action, target, type) => {
+    setData((d) => ({ ...d, audit: [auditEntry(action, target, type), ...d.audit] }));
+  }, []);
+
+  // ── Escalation ──
+  const escalateTicket = useCallback((id, level) => {
+    setData((d) => {
+      const tier = d.hierarchy[level - 1];
+      if (!tier) return d;
+      return {
+        ...d,
+        tickets: d.tickets.map((t) => t.id === id ? {
+          ...t,
+          escalation: { level, to: tier.name, title: tier.title },
+          history: [...(t.history || []), { time: fmtTime(new Date()), text: `Escalated to ${tier.title} (${tier.name})`, tone: "warn" }],
+        } : t),
+        audit: [auditEntry(`Escalated ${id} to ${tier.title}`, id, "escalated"), ...d.audit],
+      };
+    });
+  }, []);
+
+  // ── Role management ──
+  const addRole = useCallback((role) => {
+    setData((d) => {
+      const slug = String(role.name || "role").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const key = `custom-${slug || "role"}-${d.roleDefs.length + 1}`;
+      const def = { key, name: role.name, desc: role.desc || "", system: false, perms: role.perms || [] };
+      return {
+        ...d,
+        roleDefs: [...d.roleDefs, def],
+        roles: d.roles.includes(role.name) ? d.roles : [...d.roles, role.name],
+        audit: [auditEntry(`Created role "${role.name}"`, null, "role"), ...d.audit],
+      };
+    });
+  }, []);
+
+  const updateRole = useCallback((key, patch) => {
+    setData((d) => {
+      const prev = d.roleDefs.find((r) => r.key === key);
+      const renamed = patch.name && prev && patch.name !== prev.name;
+      return {
+        ...d,
+        roleDefs: d.roleDefs.map((r) => r.key === key ? { ...r, ...patch } : r),
+        roles: renamed ? d.roles.map((n) => n === prev.name ? patch.name : n) : d.roles,
+        audit: [auditEntry(`Updated role "${patch.name || prev?.name || key}"`, null, "role"), ...d.audit],
+      };
+    });
+  }, []);
+
+  const deleteRole = useCallback((key) => {
+    setData((d) => {
+      const r = d.roleDefs.find((x) => x.key === key);
+      return {
+        ...d,
+        roleDefs: d.roleDefs.filter((x) => x.key !== key),
+        roles: r ? d.roles.filter((n) => n !== r.name) : d.roles,
+        audit: [auditEntry(`Deleted role "${r?.name || key}"`, null, "role"), ...d.audit],
+      };
+    });
+  }, []);
+
   const value = useMemo(() => ({
     data, role, setRole, emptyMode, setEmptyMode,
     updateTicket, addTicketMessage, addTicket, updateCustomer, updateUser, addProduct, addCustomer,
-  }), [data, role, emptyMode, updateTicket, addTicketMessage, addTicket, updateCustomer, updateUser, addProduct, addCustomer]);
+    addAudit, escalateTicket, addRole, updateRole, deleteRole,
+  }), [data, role, emptyMode, updateTicket, addTicketMessage, addTicket, updateCustomer, updateUser, addProduct, addCustomer, addAudit, escalateTicket, addRole, updateRole, deleteRole]);
 
   return <TenantCtx.Provider value={value}>{children}</TenantCtx.Provider>;
 };
@@ -1249,8 +1374,10 @@ const TENANT_NAV = [
   { key: "products", label: "Products & Services", icon: "box", route: "/products" },
   { key: "reps", label: "Customer Representatives", icon: "people", route: "/reps" },
   { key: "users", label: "Users & Roles", icon: "shield", route: "/users" },
+  { key: "hierarchy", label: "Team Hierarchy", icon: "org", route: "/hierarchy" },
   { key: "forms", label: "Ticket Forms", icon: "form", route: "/forms" },
   { key: "reports", label: "Reports", icon: "chart", route: "/reports" },
+  { key: "audit", label: "Audit Trail", icon: "history", route: "/audit" },
   { key: "license", label: "License Usage", icon: "gauge", route: "/license" },
   { key: "settings", label: "Settings", icon: "settings", route: "/settings" },
 ];
@@ -1619,7 +1746,7 @@ const TicketsList = () => {
 
 // ═══ Ticket Detail ═══════════════════════════════════════════════════════════
 const TicketDetail = ({ id }) => {
-  const { data, updateTicket, addTicketMessage } = useTenant();
+  const { data, updateTicket, addTicketMessage, addAudit } = useTenant();
   const toast = useToast();
   const navigate = (to) => { window.location.hash = to; };
   const t = data.tickets.find((x) => x.id === id);
@@ -1645,6 +1772,7 @@ const TicketDetail = ({ id }) => {
       time: `${fmtDate(new Date())}, ${fmtTime(new Date())}`,
       body: reply.trim(),
     });
+    addAudit(replyTab === "internal" ? `Added an internal note to ${t.id}` : `Replied to customer on ${t.id}`, t.id, "reply");
     setReply("");
     toast.success(replyTab === "internal" ? "Internal note added" : "Reply sent to customer", "Updated");
   };
@@ -1670,7 +1798,7 @@ const TicketDetail = ({ id }) => {
             {statusOpen ? (
               <div className="dropdown" style={{ right: 0, top: "100%", marginTop: 4 }}>
                 {STATUS_LIST.map((s) => (
-                  <div key={s} className={`ddi ${s === t.status ? "sel" : ""}`} onClick={() => { updateTicket(t.id, { status: s }); setStatusOpen(false); toast.success(`Status set to ${s}`); }}>
+                  <div key={s} className={`ddi ${s === t.status ? "sel" : ""}`} onClick={() => { updateTicket(t.id, { status: s }); addAudit(`Changed status of ${t.id} to ${s}`, t.id, "updated"); setStatusOpen(false); toast.success(`Status set to ${s}`); }}>
                     <Badge status={s}>{s}</Badge>
                   </div>
                 ))}
@@ -1681,9 +1809,9 @@ const TicketDetail = ({ id }) => {
             <Button variant="secondary" iconRight="chevron-down" size="sm" onClick={() => setAssignOpen((o) => !o)}>Assign agent</Button>
             {assignOpen ? (
               <div className="dropdown" style={{ right: 0, top: "100%", marginTop: 4, minWidth: 220 }}>
-                <div className="ddi" onClick={() => { updateTicket(t.id, { agent: null }); setAssignOpen(false); toast.success("Ticket unassigned"); }}>Unassigned</div>
+                <div className="ddi" onClick={() => { updateTicket(t.id, { agent: null }); addAudit(`Unassigned ${t.id}`, t.id, "assigned"); setAssignOpen(false); toast.success("Ticket unassigned"); }}>Unassigned</div>
                 {data.agents.map((a) => (
-                  <div key={a.email} className={`ddi ${a.name === t.agent ? "sel" : ""}`} onClick={() => { updateTicket(t.id, { agent: a.name }); setAssignOpen(false); toast.success(`Assigned to ${a.name}`); }}>
+                  <div key={a.email} className={`ddi ${a.name === t.agent ? "sel" : ""}`} onClick={() => { updateTicket(t.id, { agent: a.name }); addAudit(`Assigned ${t.id} to ${a.name}`, t.id, "assigned"); setAssignOpen(false); toast.success(`Assigned to ${a.name}`); }}>
                     <Avatar name={a.name} size="sm"/><span>{a.name}</span>
                   </div>
                 ))}
@@ -1767,6 +1895,7 @@ const TicketDetail = ({ id }) => {
               </dl>
             </div>
           </div>
+          <EscalationCard t={t}/>
           <div className="side-card">
             <div className="side-hd"><b>History</b></div>
             <div className="side-bd">
@@ -1794,7 +1923,7 @@ const TicketDetail = ({ id }) => {
       <Modal open={archiveOpen} onClose={() => setArchiveOpen(false)} title={`Archive ${t.id}?`}
         actions={<>
           <Button variant="ghost" onClick={() => setArchiveOpen(false)}>Cancel</Button>
-          <Button variant="destructive" onClick={() => { setArchiveOpen(false); updateTicket(t.id, { status: "Closed" }); toast.success(`${t.id} archived. You can restore it from the archive.`); navigate("/tickets"); }}>Archive ticket</Button>
+          <Button variant="destructive" onClick={() => { setArchiveOpen(false); updateTicket(t.id, { status: "Closed" }); addAudit(`Archived ${t.id}`, t.id, "archived"); toast.success(`${t.id} archived. You can restore it from the archive.`); navigate("/tickets"); }}>Archive ticket</Button>
         </>}>
         <p>Archived tickets are hidden from the main view but remain searchable. This action can be undone within 30 days.</p>
       </Modal>
@@ -2356,7 +2485,7 @@ const ProductDetail = ({ id }) => {
 
 // ═══ Users & Roles ══════════════════════════════════════════════════════════
 const UsersAndRoles = () => {
-  const { data } = useTenant();
+  const { data, addAudit } = useTenant();
   const toast = useToast();
   const [tab, setTab] = useState("users");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -2368,11 +2497,11 @@ const UsersAndRoles = () => {
           <h1>Users & roles</h1>
           <p className="sub">Manage workspace members and permissions.</p>
         </div>
-        <Button variant="primary" icon="plus" onClick={() => setInviteOpen(true)}>Invite user</Button>
+        {tab === "users" ? <Button variant="primary" icon="plus" onClick={() => setInviteOpen(true)}>Invite user</Button> : null}
         <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite a team member"
           actions={<>
             <Button variant="ghost" onClick={() => setInviteOpen(false)}>Cancel</Button>
-            <Button variant="primary" icon="send" onClick={() => { setInviteOpen(false); toast.success(`Invitation sent to ${invite.email || "the new user"}.`); setInvite({ name: "", email: "", role: "Support Agent" }); }} disabled={data.license.users.used >= data.license.users.limit}>Send invitation</Button>
+            <Button variant="primary" icon="send" onClick={() => { setInviteOpen(false); addAudit(`Invited ${invite.email || "a new user"} as ${invite.role}`, null, "user"); toast.success(`Invitation sent to ${invite.email || "the new user"}.`); setInvite({ name: "", email: "", role: "Support Agent" }); }} disabled={data.license.users.used >= data.license.users.limit}>Send invitation</Button>
           </>}>
           <p>The user will receive an email to set up their password and join your workspace.</p>
           <div className="two-col-1-1">
@@ -2425,27 +2554,7 @@ const UsersAndRoles = () => {
           </div>
         </>
       ) : (
-        <Card pad={false}>
-          <div style={{ overflow: "auto" }}>
-            <table className="tbl">
-              <thead><tr>
-                <th style={{ width: "40%" }}>Permission</th><th style={{ textAlign: "center" }}>Agent</th><th style={{ textAlign: "center" }}>Manager</th><th style={{ textAlign: "center" }}>Client Admin</th><th style={{ textAlign: "center" }}>Client Owner</th><th style={{ textAlign: "center" }}>Viewer</th>
-              </tr></thead>
-              <tbody>
-                {data.permissions.map((p) => (
-                  <tr key={p.perm}>
-                    <td style={{ fontWeight: 500 }}>{p.perm}</td>
-                    {["agent","manager","admin","owner","viewer"].map((r) => (
-                      <td key={r} style={{ textAlign: "center", color: p[r] ? "var(--fg)" : "var(--text-subtle)" }}>
-                        {p[r] ? <Icon name="check" size={16} stroke={2.2}/> : "—"}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <RolesPanel/>
       )}
     </>
   );
@@ -3278,6 +3387,8 @@ const TenantStoreInner = ({ route, t, setTweak }) => {
   else if (route === "/users") screen = <UsersAndRoles/>;
   else if (route === "/license") screen = <LicenseUsage/>;
   else if (route === "/reports") screen = <Reports/>;
+  else if (route === "/audit") screen = <AuditTrail/>;
+  else if (route === "/hierarchy") screen = <TeamHierarchy/>;
   else if (route === "/forms") screen = <TicketFormsReal/>;
   else if (route === "/reps") screen = <RepsScreenReal/>;
   else if (route === "/settings") screen = <SettingsReal/>;
@@ -3301,6 +3412,338 @@ const Tweaks = ({ t, setTweak }) => (
     <TweakToggle label="Show empty dashboard" value={!!t.emptyPreview} onChange={(v) => setTweak("emptyPreview", v)}/>
   </TweaksPanel>
 );
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Added features — Audit Trail · Role management · Escalation hierarchy
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── Audit trail ──────────────────────────────────────────────────────────────
+const AUDIT_TYPES = {
+  created:   { label: "Created",   cls: "badge-new" },
+  updated:   { label: "Updated",   cls: "badge-in-progress" },
+  assigned:  { label: "Assigned",  cls: "badge-open" },
+  escalated: { label: "Escalated", cls: "badge-pending" },
+  archived:  { label: "Archived",  cls: "badge-archived" },
+  role:      { label: "Role",      cls: "badge-trial" },
+  user:      { label: "User",      cls: "badge-low" },
+  reply:     { label: "Reply",     cls: "badge-soft" },
+  auth:      { label: "Auth",      cls: "badge-soft" },
+  security:  { label: "Security",  cls: "badge-high" },
+};
+const auditMeta = (type) => AUDIT_TYPES[type] || AUDIT_TYPES.updated;
+
+const AuditTrail = () => {
+  const { data } = useTenant();
+  const toast = useToast();
+  const [q, setQ] = useState("");
+  const [type, setType] = useState("all");
+  const [actor, setActor] = useState("all");
+  const [page, setPage] = useState(1);
+  const perPage = 8;
+
+  const actors = useMemo(() => Array.from(new Set(data.audit.map((a) => a.actor))), [data.audit]);
+  const rows = useMemo(() => data.audit.filter((a) => {
+    if (type !== "all" && a.type !== type) return false;
+    if (actor !== "all" && a.actor !== actor) return false;
+    if (q.trim() && !(`${a.actor} ${a.action} ${a.target || ""}`.toLowerCase().includes(q.trim().toLowerCase()))) return false;
+    return true;
+  }), [data.audit, type, actor, q]);
+
+  useEffect(() => { setPage(1); }, [type, actor, q]);
+  const totalPages = Math.max(1, Math.ceil(rows.length / perPage));
+  const pageRows = rows.slice((page - 1) * perPage, page * perPage);
+
+  return (
+    <>
+      <div className="page-hd">
+        <div>
+          <h1>Audit trail</h1>
+          <p className="sub">A chronological record of every action taken across your workspace.</p>
+        </div>
+        <div className="actions">
+          <Button variant="secondary" size="sm" icon="download" onClick={() => toast.success(`Exporting ${rows.length} events to CSV…`, "Export started")}>Export log</Button>
+        </div>
+      </div>
+
+      <div className="filter-bar">
+        <div className="input-wrap">
+          <span className="input-icon"><Icon name="search" size={15}/></span>
+          <input className="input has-icon" placeholder="Search by user, action or target..." value={q} onChange={(e) => setQ(e.target.value)}/>
+        </div>
+        <select className="select" value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="all">All events</option>
+          {Object.keys(AUDIT_TYPES).map((k) => <option key={k} value={k}>{AUDIT_TYPES[k].label}</option>)}
+        </select>
+        <select className="select" value={actor} onChange={(e) => setActor(e.target.value)}>
+          <option value="all">All users</option>
+          {actors.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </div>
+
+      {rows.length === 0 ? (
+        <Card><EmptyState icon="history" title="No matching events" desc="Try adjusting your filters or search term." action={<Button variant="secondary" onClick={() => { setQ(""); setType("all"); setActor("all"); }}>Clear filters</Button>}/></Card>
+      ) : (
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead><tr><th style={{ minWidth: 150 }}>Timestamp</th><th>User</th><th>Action</th><th>Target</th><th style={{ textAlign: "right" }}>Event</th></tr></thead>
+            <tbody>
+              {pageRows.map((a) => {
+                const m = auditMeta(a.type);
+                return (
+                  <tr key={a.id}>
+                    <td className="mono" style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{a.ts}</td>
+                    <td><span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 500, whiteSpace: "nowrap" }}><Avatar name={a.actor} size="sm"/> {a.actor}</span></td>
+                    <td style={{ minWidth: 280 }}>{a.action}</td>
+                    <td>{a.target ? <span className="mono" style={{ fontSize: 12 }}>{a.target}</span> : <span style={{ color: "var(--text-subtle)" }}>—</span>}</td>
+                    <td style={{ textAlign: "right" }}><span className={`badge ${m.cls}`}>{m.label}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <Pagination page={page} totalPages={totalPages} onPage={setPage} summary={`Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, rows.length)} of ${rows.length} events`}/>
+        </div>
+      )}
+    </>
+  );
+};
+
+// ── Escalation card (ticket detail side panel) ───────────────────────────────
+const EscalationCard = ({ t }) => {
+  const { data, escalateTicket } = useTenant();
+  const toast = useToast();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const ladder = data.hierarchy;
+  const current = t.escalation?.level || 1;
+  const atTop = current >= ladder.length;
+  const next = atTop ? null : ladder[current];
+  const doEscalate = () => {
+    escalateTicket(t.id, current + 1);
+    setConfirmOpen(false);
+    toast.success(`Escalated to ${next.name} — ${next.title}`, "Ticket escalated");
+  };
+  return (
+    <div className="side-card">
+      <div className="side-hd"><b>Escalation</b>{current > 1 ? <Badge status="warning" dot>Level {current}</Badge> : null}</div>
+      <div className="side-bd">
+        <div className="ladder">
+          {ladder.map((r, i) => {
+            const lvl = i + 1;
+            const state = lvl === current ? "current" : lvl < current ? "done" : "future";
+            return (
+              <div key={r.email} className={`rung ${state}`}>
+                <span className="ravatar"><Avatar name={r.name} size="md" style={state === "current" ? { background: "#000" } : state === "future" ? { opacity: 0.4 } : {}}/></span>
+                <div className="rmeta">
+                  <div className="rtitle">{r.title}</div>
+                  <div className="rname" style={state === "future" ? { color: "var(--text-subtle)" } : {}}>{r.name}</div>
+                </div>
+                {lvl === current ? <Badge status="warning" dot>Current</Badge> : lvl < current ? <Icon name="check" size={14} stroke={2.4}/> : null}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 12 }}>
+          {atTop ? (
+            <div className="banner info" style={{ fontSize: 12.5 }}><span className="icon"><Icon name="info" size={14}/></span><div>At the <b>top of the escalation chain</b>. No higher tier to escalate to.</div></div>
+          ) : (
+            <Button variant="secondary" size="sm" icon="arrow-up" block onClick={() => setConfirmOpen(true)}>Escalate to {next.title}</Button>
+          )}
+        </div>
+      </div>
+      <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title={`Escalate ${t.id}?`}
+        actions={<>
+          <Button variant="ghost" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+          <Button variant="primary" icon="arrow-up" onClick={doEscalate}>Escalate ticket</Button>
+        </>}>
+        <p>This will escalate the ticket to <b>{next?.name}</b> ({next?.title}). They'll be notified, and the change is recorded in the ticket history and audit trail.</p>
+      </Modal>
+    </div>
+  );
+};
+
+// ── Team hierarchy page ──────────────────────────────────────────────────────
+const TeamHierarchy = () => {
+  const { data } = useTenant();
+  const navigate = (to) => { window.location.hash = to; };
+  const ladder = data.hierarchy;
+  const escalatedCount = data.tickets.filter((t) => (t.escalation?.level || 1) > 1).length;
+  const topDown = [...ladder].reverse();
+  return (
+    <>
+      <div className="page-hd">
+        <div>
+          <h1>Team hierarchy</h1>
+          <p className="sub">Your support escalation chain. Tickets move upward through these tiers.</p>
+        </div>
+      </div>
+      <div className="two-col-7-5" style={{ alignItems: "start" }}>
+        <Card title="Escalation chain">
+          <div className="org">
+            {topDown.map((r, i) => (
+              <Fragment key={r.email}>
+                <div className="org-node">
+                  <Avatar name={r.name} size="lg"/>
+                  <div className="org-info">
+                    <div className="org-name">{r.name}</div>
+                    <div className="org-title">{r.title}</div>
+                    <div className="org-mail mono">{r.email}</div>
+                  </div>
+                  <span className="org-lvl mono">L{r.level}</span>
+                </div>
+                {i < topDown.length - 1 ? <div className="org-link"/> : null}
+              </Fragment>
+            ))}
+          </div>
+        </Card>
+        <div className="side-panel">
+          <Card title="How escalation works">
+            <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
+              <p style={{ marginTop: 0 }}>When a ticket can't be resolved at the current tier, an agent or manager escalates it one level up from the ticket's detail view.</p>
+              <p style={{ marginBottom: 0 }}>Every escalation is recorded in the <a onClick={() => navigate("/audit")} style={{ color: "var(--fg)", textDecoration: "underline", textUnderlineOffset: 2, cursor: "pointer" }}>audit trail</a> and notifies the receiving manager.</p>
+            </div>
+          </Card>
+          <Card pad={false}>
+            <div className="side-hd" style={{ padding: "14px 16px" }}><b style={{ fontSize: 13 }}>At a glance</b></div>
+            <div style={{ padding: "4px 16px 14px" }}>
+              <div className="row" style={{ justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}><span style={{ color: "var(--text-muted)", fontSize: 13 }}>Escalation tiers</span><span className="mono" style={{ fontWeight: 600 }}>{ladder.length}</span></div>
+              <div className="row" style={{ justifyContent: "space-between", padding: "8px 0" }}><span style={{ color: "var(--text-muted)", fontSize: 13 }}>Currently escalated tickets</span><span className="mono" style={{ fontWeight: 600 }}>{escalatedCount}</span></div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </>
+  );
+};
+
+// ── Role management (Roles & permissions tab) ────────────────────────────────
+const PERM_GROUPS = ["Tickets", "Customers & products", "Administration", "Reporting"];
+
+const RoleEditorModal = ({ state, onClose }) => {
+  const { addRole, updateRole, data } = useTenant();
+  const toast = useToast();
+  const readOnly = state.mode === "view";
+  const base = state.role || {};
+  const [name, setName] = useState(base.name || "");
+  const [desc, setDesc] = useState(base.desc || "");
+  const [perms, setPerms] = useState(new Set(base.perms || []));
+  const toggle = (id) => { if (readOnly) return; setPerms((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
+  const save = () => {
+    const payload = { name: name.trim() || "Untitled role", desc: desc.trim(), perms: Array.from(perms) };
+    if (state.mode === "edit") { updateRole(base.key, payload); toast.success(`Role "${payload.name}" updated.`); }
+    else { addRole(payload); toast.success(`Role "${payload.name}" created.`); }
+    onClose();
+  };
+  const title = state.mode === "create" ? "Create a role" : state.mode === "edit" ? `Edit ${base.name}` : base.name;
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: "min(640px, calc(100vw - 32px))" }}>
+        <h2>{title}</h2>
+        <p>{readOnly ? "System roles are read-only. Duplicate this role to create an editable copy." : "Give the role a name and choose what its members can do."}</p>
+        {!readOnly ? (
+          <div className="two-col-1-1" style={{ marginBottom: 6 }}>
+            <div className="field"><label className="label">Role name <span className="required">*</span></label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Billing Specialist" autoFocus/></div>
+            <div className="field"><label className="label">Description</label><input className="input" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Short summary"/></div>
+          </div>
+        ) : null}
+        <label className="label" style={{ marginTop: 4 }}>Permissions <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>· {perms.size} selected</span></label>
+        <div style={{ maxHeight: 320, overflow: "auto", margin: "2px -4px 0", padding: "0 4px" }}>
+          {PERM_GROUPS.map((g) => (
+            <div key={g} style={{ marginBottom: 12 }}>
+              <div className="dropdown-hd" style={{ padding: "4px 2px 8px" }}>{g}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {data.permCatalog.filter((p) => p.group === g).map((p) => {
+                  const on = perms.has(p.id);
+                  return (
+                    <div key={p.id} className={`perm-check ${on ? "on" : ""} ${readOnly ? "ro" : ""}`} onClick={() => toggle(p.id)}>
+                      <span className="pc-box">{on ? <Icon name="check" size={12} stroke={2.8}/> : null}</span>
+                      <span style={{ fontSize: 12.5 }}>{p.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="modal-actions" style={{ marginTop: 16 }}>
+          <Button variant="ghost" onClick={onClose}>{readOnly ? "Close" : "Cancel"}</Button>
+          {!readOnly ? <Button variant="primary" icon="check" onClick={save} disabled={!name.trim()}>{state.mode === "edit" ? "Save changes" : "Create role"}</Button> : null}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const RolesPanel = () => {
+  const { data, deleteRole } = useTenant();
+  const toast = useToast();
+  const [editor, setEditor] = useState(null);
+  const [delRole, setDelRole] = useState(null);
+  const memberCount = (roleName) => data.users.filter((u) => u.role === roleName && u.status === "Active").length;
+  return (
+    <>
+      <div className="section-hd">
+        <h2>Roles <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>· {data.roleDefs.length}</span></h2>
+        <Button variant="primary" size="sm" icon="plus" onClick={() => setEditor({ mode: "create", role: { perms: ["ticket-view"] } })}>Create role</Button>
+      </div>
+      <div className="two-col-7-5" style={{ alignItems: "start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {data.roleDefs.map((r) => (
+            <div key={r.key} className="card card-pad">
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                <div className="row" style={{ gap: 10, alignItems: "center", minWidth: 0 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--surface-muted)", display: "grid", placeItems: "center", flexShrink: 0 }}><Icon name="shield" size={18}/></div>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="row" style={{ gap: 8 }}>
+                      <span style={{ fontWeight: 600 }}>{r.name}</span>
+                      {r.system ? <Badge status="archived">System</Badge> : <Badge status="open">Custom</Badge>}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{r.desc}</div>
+                  </div>
+                </div>
+                <KebabMenu items={[
+                  { label: r.system ? "View permissions" : "Edit role", icon: "edit", onClick: () => setEditor({ mode: r.system ? "view" : "edit", role: r }) },
+                  { label: "Duplicate", icon: "plus", onClick: () => setEditor({ mode: "create", role: { name: r.name + " (copy)", desc: r.desc, perms: r.perms } }) },
+                  ...(r.system ? [] : [{ sep: true }, { label: "Delete role", icon: "trash", destructive: true, onClick: () => setDelRole(r) }]),
+                ]}/>
+              </div>
+              <div className="row" style={{ marginTop: 12, gap: 16, fontSize: 12, color: "var(--text-muted)" }}>
+                <span className="row-tight"><Icon name="user" size={13}/> {memberCount(r.name)} member{memberCount(r.name) === 1 ? "" : "s"}</span>
+                <span className="row-tight"><Icon name="check-circle" size={13}/> {r.perms.length} permission{r.perms.length === 1 ? "" : "s"}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <Card title="Permission matrix" pad={false}>
+          <div style={{ overflow: "auto" }}>
+            <table className="tbl">
+              <thead><tr><th style={{ minWidth: 190 }}>Permission</th>{data.roleDefs.map((r) => <th key={r.key} style={{ textAlign: "center", whiteSpace: "nowrap" }}>{r.name}</th>)}</tr></thead>
+              <tbody>
+                {data.permCatalog.map((p) => (
+                  <tr key={p.id}>
+                    <td style={{ fontWeight: 500 }}>{p.label}</td>
+                    {data.roleDefs.map((r) => (
+                      <td key={r.key} style={{ textAlign: "center", color: r.perms.includes(p.id) ? "var(--fg)" : "var(--text-subtle)" }}>
+                        {r.perms.includes(p.id) ? <Icon name="check" size={15} stroke={2.2}/> : "—"}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+      {editor ? <RoleEditorModal state={editor} onClose={() => setEditor(null)}/> : null}
+      <Modal open={!!delRole} onClose={() => setDelRole(null)} title={`Delete ${delRole?.name}?`}
+        actions={<>
+          <Button variant="ghost" onClick={() => setDelRole(null)}>Cancel</Button>
+          <Button variant="destructive" onClick={() => { deleteRole(delRole.key); toast.success(`Role "${delRole.name}" deleted.`); setDelRole(null); }}>Delete role</Button>
+        </>}>
+        <p>Members currently assigned to <b>{delRole?.name}</b> will need to be reassigned to another role. This action cannot be undone.</p>
+      </Modal>
+    </>
+  );
+};
 
 // Mount
 ReactDOM.createRoot(document.getElementById("root")).render(
