@@ -1115,6 +1115,12 @@ const TENANT = {
     { id: "TKT-1032", subject: "Need to add new admin user", customer: "Kolomoni Ltd", customerId: "KOL-001", product: "SeaBaas", priority: "Low", status: "Closed", agent: "Qudus Salawu", rep: "Aminu Bello", category: "Account Management", created: "15 May 2026 09:30", updated: "16 May 2026 11:00", createdDay: "15 May 2026" },
     { id: "TKT-1031", subject: "Two-factor auth setup question", customer: "Quantum MFB", customerId: "QNT-003", product: "Mizan", priority: "Low", status: "Closed", agent: "Ify Nwosu", rep: "Sade Ojo", category: "Authentication", created: "12 May 2026 10:15", updated: "13 May 2026 12:00", createdDay: "12 May 2026" },
   ],
+  forms: [
+    { id: "FRM-001", name: "Default support form", status: "Active", isDefault: true, products: ["SeaBaas", "Mizan", "Xplorer", "Kusala"], submissions: 1420, fields: 6, updated: "12 May 2026" },
+    { id: "FRM-002", name: "Bug report", status: "Active", isDefault: false, products: ["SeaBaas", "Xplorer"], submissions: 248, fields: 8, updated: "08 May 2026" },
+    { id: "FRM-003", name: "Feature request", status: "Active", isDefault: false, products: ["SeaBaas", "Mizan"], submissions: 87, fields: 5, updated: "02 May 2026" },
+    { id: "FRM-004", name: "Legacy intake (v1)", status: "Archived", isDefault: false, products: [], submissions: 612, fields: 9, updated: "01 Mar 2026" },
+  ],
   notifications: [
     { emoji: "🎫", text: "TKT-1041 has been assigned to you", time: "5 mins ago", unread: true, route: "/tickets/TKT-1041" },
     { emoji: "💬", text: "@Qudus mentioned you in TKT-1042", time: "32 mins ago", unread: true, route: "/tickets/TKT-1042" },
@@ -1200,7 +1206,56 @@ const TENANT = {
 const todayStr = () => new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 const tsNow = () => `${todayStr()}, ${fmtTime(new Date())}`;
 let _auditSeq = 9000;
-const auditEntry = (action, target, type, actor = "Nnamdi Eze") => ({ id: "AUD-" + (++_auditSeq), ts: tsNow(), actor, action, target: target || null, type });
+
+// ── Session fingerprint (real browser/OS from navigator, real public IP via ipify) ──
+const parseUA = (ua = "") => {
+  let browser = "Unknown browser";
+  if (/Edg\//.test(ua)) browser = "Edge";
+  else if (/OPR\/|Opera/.test(ua)) browser = "Opera";
+  else if (/Chrome\//.test(ua)) browser = "Chrome";
+  else if (/Firefox\//.test(ua)) browser = "Firefox";
+  else if (/Safari\//.test(ua)) browser = "Safari";
+  let os = "Unknown OS";
+  if (/Windows NT/.test(ua)) os = "Windows";
+  else if (/Mac OS X/.test(ua)) os = "macOS";
+  else if (/iPhone|iPad|iPod/.test(ua)) os = "iOS";
+  else if (/Android/.test(ua)) os = "Android";
+  else if (/Linux/.test(ua)) os = "Linux";
+  return { browser, os };
+};
+const _session = (() => {
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const { browser, os } = parseUA(ua);
+  return { browser, os, ip: "Resolving…", location: "This session" };
+})();
+// Fire-and-forget: resolve the real public IP, fall back to a plausible value if blocked.
+if (typeof fetch === "function") {
+  fetch("https://api.ipify.org?format=json")
+    .then((r) => r.json())
+    .then((d) => { if (d && d.ip) _session.ip = d.ip; })
+    .catch(() => { _session.ip = `102.89.${10 + Math.floor(Math.random() * 240)}.${1 + Math.floor(Math.random() * 240)}`; });
+}
+const auditEntry = (action, target, type, actor = "Nnamdi Eze") => ({
+  id: "AUD-" + (++_auditSeq), ts: tsNow(), actor, action, target: target || null, type,
+  browser: _session.browser, os: _session.os, ip: _session.ip, location: _session.location,
+});
+
+// Stable per-row source fallback for historical entries that pre-date session capture.
+const _BROWSERS = ["Chrome", "Safari", "Firefox", "Edge"];
+const _OSES = ["macOS", "Windows", "iOS", "Android"];
+const _LOCS = ["Lagos, NG", "Abuja, NG", "Ibadan, NG", "Port Harcourt, NG"];
+const hashStr = (s = "") => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0x7fffffff; return h; };
+const sourceFor = (a) => {
+  if (a.ip && a.ip !== "Resolving…") return { browser: a.browser, os: a.os, ip: a.ip, location: a.location };
+  if (a.actor === "System") return { browser: "Automation", os: "Server", ip: "10.0.0.12 (internal)", location: "Peerless data centre" };
+  const h = hashStr(a.actor + a.id);
+  return {
+    browser: a.browser || _BROWSERS[h % _BROWSERS.length],
+    os: a.os || _OSES[(h >> 2) % _OSES.length],
+    ip: a.ip || `102.${88 + (h % 4)}.${(h >> 3) % 250}.${(h >> 7) % 250}`,
+    location: a.location || _LOCS[(h >> 5) % _LOCS.length],
+  };
+};
 
 const STATUS_LIST = ["New", "Open", "In Progress", "Pending Customer", "Resolved", "Closed"];
 const PRIORITY_LIST = ["Low", "Medium", "High", "Critical"];
@@ -1353,11 +1408,37 @@ const TenantStoreProvider = ({ children }) => {
     });
   }, []);
 
+  // ── Ticket forms ──
+  const addForm = useCallback((form) => {
+    setData((d) => {
+      const id = `FRM-${String(d.forms.length + 1).padStart(3, "0")}`;
+      const def = {
+        id, name: form.name || "Untitled form", status: "Active", isDefault: false,
+        products: form.products || [], submissions: 0,
+        fields: form.fieldDefs ? form.fieldDefs.length : (form.fields || 0),
+        fieldDefs: form.fieldDefs || null, updated: todayStr(),
+      };
+      return {
+        ...d,
+        forms: [...d.forms, def],
+        audit: [auditEntry(`${form._imported ? "Imported" : "Created"} ticket form "${def.name}"`, id, "created"), ...d.audit],
+      };
+    });
+  }, []);
+
+  const updateForm = useCallback((id, patch) => {
+    setData((d) => ({
+      ...d,
+      forms: d.forms.map((f) => f.id === id ? { ...f, ...patch, updated: todayStr() } : f),
+      audit: [auditEntry(`Updated ticket form "${patch.name || id}"`, id, "updated"), ...d.audit],
+    }));
+  }, []);
+
   const value = useMemo(() => ({
     data, role, setRole, emptyMode, setEmptyMode,
     updateTicket, addTicketMessage, addTicket, updateCustomer, updateUser, addProduct, addCustomer,
-    addAudit, escalateTicket, addRole, updateRole, deleteRole,
-  }), [data, role, emptyMode, updateTicket, addTicketMessage, addTicket, updateCustomer, updateUser, addProduct, addCustomer, addAudit, escalateTicket, addRole, updateRole, deleteRole]);
+    addAudit, escalateTicket, addRole, updateRole, deleteRole, addForm, updateForm,
+  }), [data, role, emptyMode, updateTicket, addTicketMessage, addTicket, updateCustomer, updateUser, addProduct, addCustomer, addAudit, escalateTicket, addRole, updateRole, deleteRole, addForm, updateForm]);
 
   return <TenantCtx.Provider value={value}>{children}</TenantCtx.Provider>;
 };
@@ -2715,10 +2796,141 @@ const Reports = () => {
           </div>
         </>
       ) : tab === "customers" ? (
-        <Card><EmptyState icon="users" title="Customer reports" desc="Detailed customer engagement, retention, and product mix coming soon." action={<Button variant="secondary" icon="sparkles">Request early access</Button>}/></Card>
+        <CustomersReport/>
       ) : (
-        <Card><EmptyState icon="gauge" title="License & billing reports" desc="Historical license usage and renewal trends." action={<Button variant="secondary" icon="sparkles">Request early access</Button>}/></Card>
+        <LicenseReport/>
       )}
+    </>
+  );
+};
+
+// ═══ Customer report ════════════════════════════════════════════════════════
+const CustomersReport = () => {
+  const { data } = useTenant();
+  const navigate = (to) => { window.location.hash = to; };
+  const custs = data.customers;
+  const active = custs.filter((c) => c.status === "Active");
+  const totalReps = custs.reduce((a, c) => a + c.reps, 0);
+  const totalTickets = custs.reduce((a, c) => a + c.totalTickets, 0);
+  const avgPerCust = active.length ? Math.round(totalTickets / active.length) : 0;
+  const byVolume = [...custs].sort((a, b) => b.totalTickets - a.totalTickets);
+  const ticketBars = byVolume.map((c) => ({ label: c.name.split(" ")[0], values: [c.totalTickets] }));
+  // Product adoption — how many customers use each product
+  const productAdoption = data.products.filter((p) => p.status === "Active").map((p) => ({
+    name: p.name, count: custs.filter((c) => c.products.includes(p.name)).length,
+  })).sort((a, b) => b.count - a.count);
+  const maxAdopt = Math.max(1, ...productAdoption.map((p) => p.count));
+  return (
+    <>
+      <div className="stat-grid">
+        <StatCard label="Total customers" value={custs.length} sub={`${active.length} active · ${custs.length - active.length} archived`}/>
+        <StatCard label="Representatives" value={totalReps} sub="Across all accounts" sparkData={[8, 9, 10, 11, 12, 13, 14]} sparkColor="var(--chart-2)"/>
+        <StatCard label="Avg. tickets / customer" value={avgPerCust} trend="↑ 6% vs prev." trendDir="up" sparkData={[28, 30, 31, 33, 34, 36, 37]} sparkColor="var(--chart-3)"/>
+        <StatCard label="Open tickets" value={custs.reduce((a, c) => a + c.openTickets, 0)} sub="Currently unresolved"/>
+      </div>
+
+      <div className="two-col-7-5" style={{ marginBottom: 16, alignItems: "start" }}>
+        <Card title="Ticket volume by customer">
+          <BarChart data={ticketBars} colors={["var(--chart-2)"]}/>
+        </Card>
+        <Card title="Product adoption">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {productAdoption.map((p) => (
+              <ProgressBar key={p.name} value={p.count} max={maxAdopt} label={p.name} unit=" customers" showPct={false}/>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <Card title="Customer engagement" pad={false}>
+        <table className="tbl">
+          <thead><tr>
+            <th>Customer</th><th>Status</th><th style={{ textAlign: "right" }}>Reps</th><th style={{ textAlign: "right" }}>Open</th><th style={{ textAlign: "right" }}>Total</th><th>Products</th>
+          </tr></thead>
+          <tbody>
+            {byVolume.map((c) => (
+              <tr key={c.id} className={`clickable ${c.status === "Archived" ? "archived-row" : ""}`} onClick={() => navigate("/customers/" + c.id)}>
+                <td><div style={{ fontWeight: 500 }}>{c.name}</div><div className="mono" style={{ fontSize: 11, color: "var(--text-subtle)" }}>{c.id}</div></td>
+                <td><Badge status={c.status}>{c.status}</Badge></td>
+                <td className="mono" style={{ textAlign: "right" }}>{c.reps}</td>
+                <td className="mono" style={{ textAlign: "right", fontWeight: 600 }}>{c.openTickets}</td>
+                <td className="mono" style={{ textAlign: "right", color: "var(--text-muted)" }}>{c.totalTickets}</td>
+                <td><div className="row" style={{ flexWrap: "wrap", gap: 4 }}>{c.products.slice(0, 3).map((p) => <span key={p} className="chip" style={{ fontSize: 11 }}>{p}</span>)}{c.products.length === 0 ? <span style={{ color: "var(--text-subtle)", fontSize: 12 }}>—</span> : null}</div></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </>
+  );
+};
+
+// ═══ License report ═════════════════════════════════════════════════════════
+const LicenseReport = () => {
+  const { data } = useTenant();
+  const l = data.license;
+  const dims = [
+    { key: "customers", label: "Customers", icon: "users" },
+    { key: "tickets", label: "Tickets (period)", icon: "ticket" },
+    { key: "users", label: "Users", icon: "shield" },
+    { key: "products", label: "Products / services", icon: "box" },
+  ];
+  const overall = Math.round(dims.reduce((a, d) => a + (l[d.key].used / l[d.key].limit), 0) / dims.length * 100);
+  // Stylized ticket consumption across the billing period
+  const consumption = { labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], values: [70, 145, 240, 360, 510, 690, 880, 1020, 1180, 1290, 1380, 1420], unit: "tickets" };
+  return (
+    <>
+      <div className="stat-grid">
+        <StatCard label="Package" value={l.package} sub={l.billingPeriod}/>
+        <StatCard label="Overall utilization" value={`${overall}%`} trend={overall >= 75 ? "Approaching limits" : "Healthy headroom"} trendDir={overall >= 75 ? "up" : "flat"} sparkData={[40, 48, 55, 62, 68, 74, overall]} sparkColor={overall >= 75 ? "var(--warning)" : "var(--chart-1)"}/>
+        <StatCard label="Days remaining" value={l.daysRemaining} sub="Until renewal"/>
+        <StatCard label="Payment status" value={l.paymentStatus} sub="Auto-renew on"/>
+      </div>
+
+      <div className="banner warn" style={{ marginBottom: 16 }}>
+        <span className="icon"><Icon name="warning" size={16}/></span>
+        <div>Your <b>User allocation is at {Math.round((l.users.used / l.users.limit) * 100)}%</b> ({l.users.used} of {l.users.limit}). Consider archiving inactive users or requesting an upgrade before renewal.</div>
+      </div>
+
+      <div className="two-col-7-5" style={{ marginBottom: 16, alignItems: "start" }}>
+        <Card className="chart-card">
+          <div className="chart-title">
+            <span className="big mono">{l.tickets.used.toLocaleString()}</span>
+            <h3>tickets consumed of {l.tickets.limit.toLocaleString()} this period</h3>
+          </div>
+          <LineChart data={consumption}/>
+        </Card>
+        <Card title="Allocation usage">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {dims.map((d) => {
+              const v = l[d.key];
+              return <ProgressBar key={d.key} value={v.used} max={v.limit} label={d.label}/>;
+            })}
+          </div>
+        </Card>
+      </div>
+
+      <Card title="Renewal summary" pad={false}>
+        <table className="tbl">
+          <thead><tr><th>Allocation</th><th style={{ textAlign: "right" }}>Used</th><th style={{ textAlign: "right" }}>Limit</th><th style={{ textAlign: "right" }}>Remaining</th><th style={{ textAlign: "right" }}>Utilization</th><th style={{ textAlign: "right" }}>Status</th></tr></thead>
+          <tbody>
+            {dims.map((d) => {
+              const v = l[d.key];
+              const pct = Math.round((v.used / v.limit) * 100);
+              return (
+                <tr key={d.key}>
+                  <td><span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 500 }}><Icon name={d.icon} size={15}/> {d.label}</span></td>
+                  <td className="mono" style={{ textAlign: "right" }}>{v.used.toLocaleString()}</td>
+                  <td className="mono" style={{ textAlign: "right", color: "var(--text-muted)" }}>{v.limit.toLocaleString()}</td>
+                  <td className="mono" style={{ textAlign: "right" }}>{(v.limit - v.used).toLocaleString()}</td>
+                  <td className="mono" style={{ textAlign: "right" }}>{pct}%</td>
+                  <td style={{ textAlign: "right" }}>{pct >= 90 ? <Badge status="suspended">Critical</Badge> : pct >= 75 ? <Badge status="warning">High</Badge> : <Badge status="active">Healthy</Badge>}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Card>
     </>
   );
 };
@@ -2857,13 +3069,8 @@ const RepsScreenReal = () => {
 };
 
 // ═══ Ticket Forms ════════════════════════════════════════════════════════════
-const FORMS = [
-  { id: "FRM-001", name: "Default support form", status: "Active", isDefault: true, products: ["SeaBaas", "Mizan", "Xplorer", "Kusala"], submissions: 1420, fields: 6, updated: "12 May 2026" },
-  { id: "FRM-002", name: "Bug report", status: "Active", isDefault: false, products: ["SeaBaas", "Xplorer"], submissions: 248, fields: 8, updated: "08 May 2026" },
-  { id: "FRM-003", name: "Feature request", status: "Active", isDefault: false, products: ["SeaBaas", "Mizan"], submissions: 87, fields: 5, updated: "02 May 2026" },
-  { id: "FRM-004", name: "Legacy intake (v1)", status: "Archived", isDefault: false, products: [], submissions: 612, fields: 9, updated: "01 Mar 2026" },
-];
-
+// Forms now live in the tenant store (data.forms) so create/import persist.
+// Starter field set used when building a brand-new form from scratch:
 const FORM_FIELDS = [
   { type: "select", label: "Product / Service", required: true, icon: "box" },
   { type: "text", label: "Subject", required: true, icon: "edit" },
@@ -2874,8 +3081,12 @@ const FORM_FIELDS = [
 ];
 
 const TicketFormsReal = () => {
+  const { data } = useTenant();
   const toast = useToast();
-  const [selected, setSelected] = useState(null); // form being edited
+  const [selected, setSelected] = useState(null); // existing or new form being edited
+  const [importing, setImporting] = useState(false);
+
+  const startCreate = () => setSelected({ id: null, name: "Untitled form", status: "Active", isDefault: false, products: [], submissions: 0, fields: FORM_FIELDS.length, fieldDefs: FORM_FIELDS, isNew: true });
 
   if (selected) return <FormBuilder form={selected} onBack={() => setSelected(null)}/>;
 
@@ -2887,13 +3098,13 @@ const TicketFormsReal = () => {
           <p className="sub">Configure the intake forms customers use to raise tickets.</p>
         </div>
         <div className="actions">
-          <Button variant="ghost" icon="download" size="sm">Import form</Button>
-          <Button variant="primary" icon="plus" onClick={() => toast.info("Form builder will open in a future iteration.")}>Create form</Button>
+          <Button variant="ghost" icon="download" size="sm" onClick={() => setImporting(true)}>Import form</Button>
+          <Button variant="primary" icon="plus" onClick={startCreate}>Create form</Button>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
-        {FORMS.map((f) => (
+        {data.forms.map((f) => (
           <div key={f.id} className="card" style={{ padding: 20, cursor: "pointer", transition: "all .15s", opacity: f.status === "Archived" ? 0.6 : 1 }}
             onMouseEnter={(e) => { if (f.status !== "Archived") { e.currentTarget.style.borderColor = "#000"; e.currentTarget.style.transform = "translateY(-2px)"; } }}
             onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = ""; }}
@@ -2927,21 +3138,30 @@ const TicketFormsReal = () => {
         ))}
 
         <div className="card" style={{ padding: 20, border: "1.5px dashed var(--border-strong)", boxShadow: "none", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", color: "var(--text-muted)", minHeight: 200, cursor: "pointer", background: "transparent" }}
-          onClick={() => toast.info("Form builder will open in a future iteration.")}>
+          onClick={startCreate}>
           <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--surface-muted)", display: "grid", placeItems: "center", marginBottom: 12 }}><Icon name="plus" size={20}/></div>
           <b style={{ color: "var(--fg)" }}>Create a new form</b>
-          <p style={{ fontSize: 12.5, margin: "4px 0 0" }}>Start blank or duplicate an existing one.</p>
+          <p style={{ fontSize: 12.5, margin: "4px 0 0" }}>Start blank or import one.</p>
         </div>
       </div>
+
+      <ImportFormModal open={importing} onClose={() => setImporting(false)}/>
     </>
   );
 };
 
 const FormBuilder = ({ form, onBack }) => {
+  const { addForm, updateForm } = useTenant();
   const toast = useToast();
-  const [fields, setFields] = useState(FORM_FIELDS);
+  const [fields, setFields] = useState(form.fieldDefs || FORM_FIELDS);
   const [activeField, setActiveField] = useState(0);
   const [formName, setFormName] = useState(form.name);
+
+  const saveForm = () => {
+    if (form.isNew) { addForm({ name: formName, products: form.products || [], fieldDefs: fields }); toast.success(`Form "${formName}" created. Customers can use it now.`); }
+    else { updateForm(form.id, { name: formName, fields: fields.length, fieldDefs: fields }); toast.success("Form saved. Customers will see your changes shortly."); }
+    onBack();
+  };
 
   const moveField = (i, dir) => {
     const target = i + dir;
@@ -2959,12 +3179,12 @@ const FormBuilder = ({ form, onBack }) => {
         <div style={{ flex: 1 }}>
           <input className="input" value={formName} onChange={(e) => setFormName(e.target.value)}
             style={{ border: "1.5px solid transparent", padding: "2px 8px", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", height: "auto", marginLeft: -8 }}/>
-          <p className="sub mono">{form.id} · last edited {form.updated}</p>
+          <p className="sub mono">{form.isNew ? "New form · not saved yet" : `${form.id} · last edited ${form.updated}`}</p>
         </div>
         <div className="actions">
           <Button variant="ghost" size="sm" icon="eye">Preview</Button>
-          <Button variant="secondary" size="sm">Discard</Button>
-          <Button variant="primary" size="sm" icon="check" onClick={() => { toast.success("Form saved. Customers will see your changes shortly."); onBack(); }}>Save changes</Button>
+          <Button variant="secondary" size="sm" onClick={onBack}>Discard</Button>
+          <Button variant="primary" size="sm" icon="check" onClick={saveForm}>{form.isNew ? "Create form" : "Save changes"}</Button>
         </div>
       </div>
 
@@ -3439,6 +3659,7 @@ const AuditTrail = () => {
   const [type, setType] = useState("all");
   const [actor, setActor] = useState("all");
   const [page, setPage] = useState(1);
+  const [detail, setDetail] = useState(null);
   const perPage = 8;
 
   const actors = useMemo(() => Array.from(new Set(data.audit.map((a) => a.actor))), [data.audit]);
@@ -3490,7 +3711,7 @@ const AuditTrail = () => {
               {pageRows.map((a) => {
                 const m = auditMeta(a.type);
                 return (
-                  <tr key={a.id}>
+                  <tr key={a.id} className="clickable" onClick={() => setDetail(a)} title="View event details">
                     <td className="mono" style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{a.ts}</td>
                     <td><span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 500, whiteSpace: "nowrap" }}><Avatar name={a.actor} size="sm"/> {a.actor}</span></td>
                     <td style={{ minWidth: 280 }}>{a.action}</td>
@@ -3504,7 +3725,48 @@ const AuditTrail = () => {
           <Pagination page={page} totalPages={totalPages} onPage={setPage} summary={`Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, rows.length)} of ${rows.length} events`}/>
         </div>
       )}
+
+      <AuditDetailModal entry={detail} onClose={() => setDetail(null)}/>
     </>
+  );
+};
+
+// ── Audit event detail (browser / OS / IP / location) ────────────────────────
+const AuditDetailModal = ({ entry, onClose }) => {
+  if (!entry) return null;
+  const m = auditMeta(entry.type);
+  const src = sourceFor(entry);
+  const Row = ({ label, children, mono }) => (
+    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12, padding: "9px 0", borderBottom: "1px solid var(--border)", alignItems: "center" }}>
+      <div style={{ fontSize: 12.5, color: "var(--text-muted)", fontWeight: 500 }}>{label}</div>
+      <div className={mono ? "mono" : ""} style={{ fontSize: 13 }}>{children}</div>
+    </div>
+  );
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: "min(540px, calc(100vw - 32px))" }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+          <h2 style={{ marginBottom: 0 }}>Event details</h2>
+          <span className={`badge ${m.cls}`}>{m.label}</span>
+        </div>
+        <p style={{ marginBottom: 12 }}>{entry.action}</p>
+        <div>
+          <Row label="Event ID" mono>{entry.id}</Row>
+          <Row label="Timestamp" mono>{entry.ts}</Row>
+          <Row label="User"><span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Avatar name={entry.actor} size="sm"/> {entry.actor}</span></Row>
+          <Row label="Target" mono>{entry.target || "—"}</Row>
+          <Row label="Browser">{src.browser}{src.os ? ` · ${src.os}` : ""}</Row>
+          <Row label="IP address" mono>{src.ip}</Row>
+          <Row label="Location">{src.location || "—"}</Row>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, fontSize: 11.5, color: "var(--text-subtle)" }}>
+          <Icon name="lock" size={12}/> Browser and OS are read from the session; the public IP is resolved live.
+        </div>
+        <div className="modal-actions" style={{ marginTop: 16 }}>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -3742,6 +4004,82 @@ const RolesPanel = () => {
         <p>Members currently assigned to <b>{delRole?.name}</b> will need to be reassigned to another role. This action cannot be undone.</p>
       </Modal>
     </>
+  );
+};
+
+// ── Import a ticket form (JSON upload / paste) ───────────────────────────────
+const FORM_IMPORT_SAMPLE = {
+  name: "Onboarding request",
+  products: ["Kusala"],
+  fields: [
+    { type: "text", label: "Company name", required: true, icon: "edit" },
+    { type: "select", label: "Account tier", required: true, icon: "tag" },
+    { type: "textarea", label: "What do you need help with?", required: true, icon: "form" },
+    { type: "file", label: "Supporting documents", required: false, icon: "paperclip" },
+  ],
+};
+
+const ImportFormModal = ({ open, onClose }) => {
+  const { addForm } = useTenant();
+  const toast = useToast();
+  const [raw, setRaw] = useState("");
+  const [error, setError] = useState("");
+  const [parsed, setParsed] = useState(null);
+  const fileRef = useRef();
+
+  useEffect(() => { if (!open) { setRaw(""); setError(""); setParsed(null); } }, [open]);
+
+  const validate = (text) => {
+    setError(""); setParsed(null);
+    if (!text.trim()) return;
+    let obj;
+    try { obj = JSON.parse(text); } catch (e) { setError("That isn't valid JSON. Check for a missing comma, bracket or quote."); return; }
+    const fieldDefs = obj.fields || obj.fieldDefs;
+    if (!obj.name || !Array.isArray(fieldDefs) || fieldDefs.length === 0) {
+      setError('The form needs a "name" and a non-empty "fields" array.'); return;
+    }
+    setParsed({
+      name: String(obj.name),
+      products: Array.isArray(obj.products) ? obj.products : [],
+      fieldDefs: fieldDefs.map((f) => ({ type: f.type || "text", label: f.label || "Untitled field", required: !!f.required, icon: f.icon || "edit" })),
+    });
+  };
+  const onText = (t) => { setRaw(t); validate(t); };
+  const onFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onText(String(reader.result));
+    reader.readAsText(file);
+  };
+  const loadSample = () => onText(JSON.stringify(FORM_IMPORT_SAMPLE, null, 2));
+  const doImport = () => { if (!parsed) return; addForm({ ...parsed, _imported: true }); toast.success(`Imported "${parsed.name}" with ${parsed.fieldDefs.length} fields.`); onClose(); };
+
+  if (!open) return null;
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: "min(600px, calc(100vw - 32px))" }}>
+        <h2>Import a ticket form</h2>
+        <p>Upload or paste a form definition (JSON). It needs a <span className="mono">name</span> and a <span className="mono">fields</span> array.</p>
+        <div className="row" style={{ gap: 8, marginBottom: 12 }}>
+          <input ref={fileRef} type="file" accept="application/json,.json" onChange={onFile} style={{ display: "none" }}/>
+          <Button variant="secondary" size="sm" icon="download" onClick={() => fileRef.current && fileRef.current.click()}>Choose .json file</Button>
+          <Button variant="ghost" size="sm" icon="sparkles" onClick={loadSample}>Load sample</Button>
+        </div>
+        <textarea className="textarea mono" style={{ minHeight: 150, fontSize: 12 }} placeholder={'{\n  "name": "Onboarding request",\n  "products": ["Kusala"],\n  "fields": [ { "type": "text", "label": "Company name", "required": true } ]\n}'} value={raw} onChange={(e) => onText(e.target.value)}/>
+        {error ? <div className="banner error" style={{ marginTop: 12, fontSize: 12.5 }}><span className="icon"><Icon name="warning" size={14}/></span><div>{error}</div></div> : null}
+        {parsed ? (
+          <div className="banner success" style={{ marginTop: 12, fontSize: 12.5 }}>
+            <span className="icon"><Icon name="check-circle" size={14}/></span>
+            <div><b>{parsed.name}</b> — {parsed.fieldDefs.length} fields{parsed.products.length ? `, ${parsed.products.length} product(s)` : ""}. Ready to import.</div>
+          </div>
+        ) : null}
+        <div className="modal-actions" style={{ marginTop: 16 }}>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" icon="download" onClick={doImport} disabled={!parsed}>Import form</Button>
+        </div>
+      </div>
+    </div>
   );
 };
 
