@@ -1789,10 +1789,25 @@ const TICKET_SORTERS = {
 // Table header cell with optional click-to-sort and a filter dropdown.
 const Th = ({ label, sortKey, sort, onSort, filter }) => {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
   const ref = useRef();
+  const btnRef = useRef();
   useClickAway(ref, () => setOpen(false));
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => { window.removeEventListener("resize", close); window.removeEventListener("scroll", close, true); };
+  }, [open]);
   const isSorted = sortKey && sort.key === sortKey;
   const isFiltered = filter && filter.value !== filter.all;
+  const toggle = () => {
+    if (open) { setOpen(false); return; }
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) });
+    setOpen(true);
+  };
   return (
     <div className="th-inner">
       <button type="button" className={`th-sort ${isSorted ? "active" : ""}`} onClick={() => sortKey && onSort(sortKey)} style={{ cursor: sortKey ? "pointer" : "default" }}>
@@ -1800,12 +1815,12 @@ const Th = ({ label, sortKey, sort, onSort, filter }) => {
         {sortKey ? <Icon name={isSorted ? (sort.dir === "asc" ? "chevron-up" : "chevron-down") : "arrow-down"} size={11} style={{ opacity: isSorted ? 0.9 : 0.25 }}/> : null}
       </button>
       {filter ? (
-        <span ref={ref} style={{ position: "relative", display: "inline-flex" }}>
-          <button type="button" className={`th-filter ${isFiltered ? "on" : ""}`} onClick={() => setOpen((o) => !o)} title="Filter">
+        <span ref={ref} style={{ display: "inline-flex" }}>
+          <button ref={btnRef} type="button" className={`th-filter ${isFiltered ? "on" : ""}`} onClick={toggle} title="Filter">
             <Icon name="filter" size={12}/>{isFiltered ? <span className="th-filter-dot"/> : null}
           </button>
           {open ? (
-            <div className="dropdown" style={{ top: "100%", marginTop: 6, right: 0, minWidth: 180, maxHeight: 280, overflow: "auto" }}>
+            <div className="dropdown" style={{ position: "fixed", top: pos.top, right: pos.right, marginTop: 0, minWidth: 180, maxHeight: 280, overflow: "auto" }}>
               {filter.options.map((o) => {
                 const val = typeof o === "string" ? o : o.value;
                 const lbl = typeof o === "string" ? o : o.label;
@@ -1924,7 +1939,7 @@ const TicketsList = () => {
               {pageRows.map((t) => (
                 <tr key={t.id} className="clickable" onClick={() => navigate("/tickets/" + t.id)}>
                   <td className="mono" style={{ fontWeight: 600, fontSize: 12.5 }}>{t.id}</td>
-                  <td style={{ fontWeight: 500, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.subject}</td>
+                  <td style={{ fontWeight: 500, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.subject}</td>
                   <td>{t.customer}</td>
                   <td><span className="chip">{t.product}</span></td>
                   <td><Badge status={t.priority}>{t.priority}</Badge></td>

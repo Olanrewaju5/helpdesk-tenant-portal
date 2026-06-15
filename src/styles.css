@@ -1177,16 +1177,19 @@ a { color: inherit; text-decoration: none; }
 
 /* In-table filtering + sorting (tickets) */
 .tbl-toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); background: #fff; border-radius: var(--radius-card) var(--radius-card) 0 0; }
-.tbl thead th .th-inner { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.tbl thead th .th-inner { display: flex; align-items: center; gap: 4px; justify-content: space-between; }
 .th-sort { background: none; border: 0; padding: 0; font: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .th-sort.active { color: var(--fg); }
 .th-filter { position: relative; background: none; border: 0; padding: 2px; border-radius: 4px; color: var(--text-subtle); display: inline-grid; place-items: center; cursor: pointer; }
 .th-filter:hover { background: var(--surface-hover); color: var(--fg); }
 .th-filter.on { color: var(--fg); }
 .th-filter-dot { position: absolute; top: 0; right: 0; width: 6px; height: 6px; border-radius: 999px; background: var(--chart-1); border: 1.5px solid var(--surface-muted); }
-/* Let header filter menus escape the table box */
-.tickets-table-wrap { overflow: visible; }
+/* Contain any horizontal overflow inside the card (filter menus are position:fixed, so they're never clipped) */
+.tickets-table-wrap { overflow-x: auto; }
 .tickets-table-wrap .tbl thead th { position: static; }
+/* Tighten columns so the wide table fits the page at desktop widths */
+.tickets-table-wrap .tbl th, .tickets-table-wrap .tbl td { padding-left: 12px; padding-right: 12px; }
+.tickets-table-wrap .tbl td .chip { font-size: 11px; padding: 2px 8px; }
 
 /* Collapsible sidebar group (Settings) */
 .nav-group { display: flex; flex-direction: column; gap: 1px; margin: 1px 0 3px 17px; padding-left: 9px; border-left: 1px solid var(--sidebar-border); }
