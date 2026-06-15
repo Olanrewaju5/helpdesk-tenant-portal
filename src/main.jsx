@@ -1771,6 +1771,54 @@ const TenantDashboard = () => {
 };
 
 // ═══ Tickets List ════════════════════════════════════════════════════════════
+// Rank maps + comparators for in-table sorting
+const PRIO_RANK = { Low: 1, Medium: 2, High: 3, Critical: 4 };
+const SEV_RANK = { Minor: 1, Medium: 2, High: 3, Critical: 4 };
+const parseUpdated = (s) => { const d = new Date((s || "").split(" ").slice(0, 3).join(" ")); return isNaN(d.getTime()) ? 0 : d.getTime(); };
+const TICKET_SORTERS = {
+  id: (a, b) => (parseInt(a.id.replace(/\D/g, ""), 10) || 0) - (parseInt(b.id.replace(/\D/g, ""), 10) || 0),
+  subject: (a, b) => a.subject.localeCompare(b.subject),
+  customer: (a, b) => a.customer.localeCompare(b.customer),
+  priority: (a, b) => (PRIO_RANK[a.priority] || 0) - (PRIO_RANK[b.priority] || 0),
+  severity: (a, b) => (SEV_RANK[a.severity] || 0) - (SEV_RANK[b.severity] || 0),
+  status: (a, b) => STATUS_LIST.indexOf(a.status) - STATUS_LIST.indexOf(b.status),
+  agent: (a, b) => (a.agent || "~").localeCompare(b.agent || "~"),
+  updated: (a, b) => parseUpdated(a.updated) - parseUpdated(b.updated),
+};
+
+// Table header cell with optional click-to-sort and a filter dropdown.
+const Th = ({ label, sortKey, sort, onSort, filter }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+  useClickAway(ref, () => setOpen(false));
+  const isSorted = sortKey && sort.key === sortKey;
+  const isFiltered = filter && filter.value !== filter.all;
+  return (
+    <div className="th-inner">
+      <button type="button" className={`th-sort ${isSorted ? "active" : ""}`} onClick={() => sortKey && onSort(sortKey)} style={{ cursor: sortKey ? "pointer" : "default" }}>
+        <span>{label}</span>
+        {sortKey ? <Icon name={isSorted ? (sort.dir === "asc" ? "chevron-up" : "chevron-down") : "arrow-down"} size={11} style={{ opacity: isSorted ? 0.9 : 0.25 }}/> : null}
+      </button>
+      {filter ? (
+        <span ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+          <button type="button" className={`th-filter ${isFiltered ? "on" : ""}`} onClick={() => setOpen((o) => !o)} title="Filter">
+            <Icon name="filter" size={12}/>{isFiltered ? <span className="th-filter-dot"/> : null}
+          </button>
+          {open ? (
+            <div className="dropdown" style={{ top: "100%", marginTop: 6, right: 0, minWidth: 180, maxHeight: 280, overflow: "auto" }}>
+              {filter.options.map((o) => {
+                const val = typeof o === "string" ? o : o.value;
+                const lbl = typeof o === "string" ? o : o.label;
+                return <div key={val} className={`ddi ${filter.value === val ? "sel" : ""}`} onClick={() => { filter.set(val); setOpen(false); }}>{lbl}</div>;
+              })}
+            </div>
+          ) : null}
+        </span>
+      ) : null}
+    </div>
+  );
+};
+
 const TicketsList = () => {
   const { data, emptyMode } = useTenant();
   const navigate = (to) => { window.location.hash = to; };
@@ -1808,11 +1856,21 @@ const TicketsList = () => {
       { label: "Closed", status: "Closed", count: c("Closed"), dot: "#374151" },
     ];
   }, [data.tickets]);
-  const anyFilter = search || status !== "All" || priority !== "All" || severity !== "All" || customer !== "All" || agentFilter !== "All";
-  const resetFilters = () => { setSearch(""); setStatus("All"); setPriority("All"); setSeverity("All"); setCustomer("All"); setAgentFilter("All"); setPage(1); };
+  const [sort, setSort] = useState({ key: null, dir: "asc" });
+  const toggleSort = (key) => { setSort((s) => s.key === key ? (s.dir === "asc" ? { key, dir: "desc" } : { key: null, dir: "asc" }) : { key, dir: "asc" }); setPage(1); };
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER));
-  const pageRows = filtered.slice((page - 1) * PER, page * PER);
+  const sorted = useMemo(() => {
+    if (!sort.key || !TICKET_SORTERS[sort.key]) return filtered;
+    const arr = [...filtered].sort(TICKET_SORTERS[sort.key]);
+    return sort.dir === "desc" ? arr.reverse() : arr;
+  }, [filtered, sort]);
+
+  const anyFilter = search || status !== "All" || priority !== "All" || severity !== "All" || customer !== "All" || agentFilter !== "All" || sort.key;
+  const resetFilters = () => { setSearch(""); setStatus("All"); setPriority("All"); setSeverity("All"); setCustomer("All"); setAgentFilter("All"); setSort({ key: null, dir: "asc" }); setPage(1); };
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PER));
+  const pageRows = sorted.slice((page - 1) * PER, page * PER);
+  const activeCustomers = data.customers.filter((c) => c.status === "Active").map((c) => c.name);
 
   return (
     <>
@@ -1836,40 +1894,31 @@ const TicketsList = () => {
         ))}
       </div>
 
-      <div className="filter-bar">
-        <div className="input-wrap">
-          <span className="input-icon"><Icon name="search" size={15}/></span>
-          <input className="input has-icon" placeholder="Search by ID, subject, or customer..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}/>
+      <div className="tbl-wrap tickets-table-wrap">
+        <div className="tbl-toolbar">
+          <div className="input-wrap" style={{ flex: 1, maxWidth: 380 }}>
+            <span className="input-icon"><Icon name="search" size={15}/></span>
+            <input className="input has-icon" style={{ height: 36 }} placeholder="Search by ID, subject, or customer..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}/>
+          </div>
+          <div className="spacer"/>
+          <span style={{ fontSize: 12.5, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{sorted.length} of {data.tickets.length} tickets</span>
+          {anyFilter ? <Button variant="ghost" size="sm" icon="x" onClick={resetFilters}>Reset</Button> : null}
         </div>
-        <select className="select" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-          <option>All</option>{STATUS_LIST.map((s) => <option key={s}>{s}</option>)}
-        </select>
-        <select className="select" value={priority} onChange={(e) => { setPriority(e.target.value); setPage(1); }}>
-          <option>All</option>{PRIORITY_LIST.map((p) => <option key={p}>{p}</option>)}
-        </select>
-        <select className="select" value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(1); }}>
-          <option value="All">All severities</option>{SEVERITY_LIST.map((s) => <option key={s}>{s}</option>)}
-        </select>
-        <select className="select" value={customer} onChange={(e) => { setCustomer(e.target.value); setPage(1); }}>
-          <option>All customers</option>{data.customers.filter((c) => c.status === "Active").map((c) => <option key={c.id}>{c.name}</option>)}
-        </select>
-        <select className="select" value={agentFilter} onChange={(e) => { setAgentFilter(e.target.value); setPage(1); }}>
-          <option>All agents</option>
-          <option>Unassigned</option>
-          {data.agents.map((a) => <option key={a.email}>{a.name}</option>)}
-        </select>
-        {anyFilter ? (
-          <Button variant="ghost" size="sm" icon="x" onClick={resetFilters}>Reset</Button>
-        ) : null}
-      </div>
-
-      <div className="tbl-wrap">
         {pageRows.length === 0 ? (
           <EmptyState icon="search" title="No tickets match your filters" desc="Try adjusting your filters or search terms." action={<Button variant="secondary" onClick={resetFilters}>Clear filters</Button>}/>
         ) : (
           <table className="tbl">
             <thead><tr>
-              <th>Ticket</th><th>Subject</th><th>Customer</th><th>Product</th><th>Priority</th><th>Severity</th><th>Status</th><th>Agent</th><th>Updated</th><th></th>
+              <th><Th label="Ticket" sortKey="id" sort={sort} onSort={toggleSort}/></th>
+              <th><Th label="Subject" sortKey="subject" sort={sort} onSort={toggleSort}/></th>
+              <th><Th label="Customer" sortKey="customer" sort={sort} onSort={toggleSort} filter={{ value: customer, set: (v) => { setCustomer(v); setPage(1); }, all: "All", options: ["All", ...activeCustomers] }}/></th>
+              <th>Product</th>
+              <th><Th label="Priority" sortKey="priority" sort={sort} onSort={toggleSort} filter={{ value: priority, set: (v) => { setPriority(v); setPage(1); }, all: "All", options: ["All", ...PRIORITY_LIST] }}/></th>
+              <th><Th label="Severity" sortKey="severity" sort={sort} onSort={toggleSort} filter={{ value: severity, set: (v) => { setSeverity(v); setPage(1); }, all: "All", options: ["All", ...SEVERITY_LIST] }}/></th>
+              <th><Th label="Status" sortKey="status" sort={sort} onSort={toggleSort} filter={{ value: status, set: (v) => { setStatus(v); setPage(1); }, all: "All", options: ["All", ...STATUS_LIST] }}/></th>
+              <th><Th label="Agent" sortKey="agent" sort={sort} onSort={toggleSort} filter={{ value: agentFilter, set: (v) => { setAgentFilter(v); setPage(1); }, all: "All", options: ["All", "Unassigned", ...data.agents.map((a) => a.name)] }}/></th>
+              <th><Th label="Updated" sortKey="updated" sort={sort} onSort={toggleSort}/></th>
+              <th></th>
             </tr></thead>
             <tbody>
               {pageRows.map((t) => (
@@ -2731,6 +2780,7 @@ const UsersAndRoles = () => {
 // ═══ License Usage ══════════════════════════════════════════════════════════
 const LicenseUsage = () => {
   const { data } = useTenant();
+  const toast = useToast();
   const l = data.license;
   const dims = [
     { key: "customers", label: "Client Customers", icon: "users", helper: "Archive inactive customers to free capacity." },
@@ -2738,28 +2788,42 @@ const LicenseUsage = () => {
     { key: "users", label: "Users", icon: "shield", helper: "Archive inactive users to free a slot." },
     { key: "products", label: "Products / Services", icon: "box", helper: "Archive unused products/services to free capacity." },
   ];
+  const overall = Math.round(dims.reduce((a, d) => a + (l[d.key].used / l[d.key].limit), 0) / dims.length * 100);
+  const userPct = Math.round((l.users.used / l.users.limit) * 100);
+  // Stylized ticket consumption across the billing period
+  const consumption = { labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], values: [70, 145, 240, 360, 510, 690, 880, 1020, 1180, 1290, 1380, 1420], unit: "tickets" };
   return (
     <>
       <div className="page-hd">
         <div>
           <h1>License usage</h1>
-          <p className="sub">Read-only view of your current package limits.</p>
+          <p className="sub">Your package limits, consumption and renewal — {l.billingPeriod}.</p>
+        </div>
+        <div className="actions">
+          <Button variant="secondary" size="sm" icon="mail" onClick={() => toast.info("We'll connect you with your platform administrator.")}>Contact administrator</Button>
+          <Button variant="primary" size="sm" icon="sparkles" onClick={() => toast.success("Upgrade request sent to your platform administrator.", "Request sent")}>Request upgrade</Button>
         </div>
       </div>
 
-      <Card style={{ marginBottom: 20 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 24 }}>
-          <div><div style={{ fontSize: 11.5, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>Package</div><div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>{l.package}</div></div>
-          <div><div style={{ fontSize: 11.5, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>Billing period</div><div className="mono" style={{ marginTop: 6, fontSize: 13 }}>{l.billingPeriod}</div></div>
-          <div><div style={{ fontSize: 11.5, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>Payment status</div><div style={{ marginTop: 4 }}><Badge status="Paid">Paid</Badge></div></div>
-          <div><div style={{ fontSize: 11.5, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>Days remaining</div><div className="mono" style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>{l.daysRemaining} <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 400 }}>days</span></div></div>
-        </div>
-      </Card>
+      <div className="stat-grid">
+        <StatCard label="Package" value={l.package} sub={`Payment: ${l.paymentStatus}`}/>
+        <StatCard label="Overall utilization" value={`${overall}%`} trend={overall >= 75 ? "Approaching limits" : "Healthy headroom"} trendDir={overall >= 75 ? "up" : "flat"} sparkData={[40, 48, 55, 62, 68, 74, overall]} sparkColor={overall >= 75 ? "var(--warning)" : "var(--chart-1)"}/>
+        <StatCard label="Tickets this period" value={l.tickets.used.toLocaleString()} sub={`of ${l.tickets.limit.toLocaleString()} included`}/>
+        <StatCard label="Days remaining" value={l.daysRemaining} sub="Until renewal"/>
+      </div>
 
-      <div className="banner warn" style={{ marginBottom: 20 }}>
+      <div className="banner warn" style={{ marginBottom: 16 }}>
         <span className="icon"><Icon name="warning" size={16}/></span>
-        <div>You are approaching your <b>User limit (90%)</b>. Archive inactive users or contact your administrator to request an upgrade.</div>
+        <div>You are approaching your <b>User limit ({userPct}%)</b> ({l.users.used} of {l.users.limit}). Archive inactive users or request an upgrade before renewal.</div>
       </div>
+
+      <Card className="chart-card" style={{ marginBottom: 16 }}>
+        <div className="chart-title">
+          <span className="big mono">{l.tickets.used.toLocaleString()}</span>
+          <h3>tickets consumed of {l.tickets.limit.toLocaleString()} this billing period</h3>
+        </div>
+        <LineChart data={consumption}/>
+      </Card>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
         {dims.map((d) => {
@@ -2779,24 +2843,12 @@ const LicenseUsage = () => {
               </div>
               <div className="row" style={{ alignItems: "baseline", gap: 8, marginBottom: 8 }}>
                 <div className="mono" style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em" }}>{v.used.toLocaleString()}<span style={{ fontSize: 14, color: "var(--text-muted)", fontWeight: 400 }}> / {v.limit.toLocaleString()}</span></div>
-                <span className="mono" style={{ color: "var(--text-muted)", marginLeft: "auto" }}>{pct}%</span>
+                <span className="mono" style={{ color: "var(--text-muted)", marginLeft: "auto" }}>{pct}% · {(v.limit - v.used).toLocaleString()} left</span>
               </div>
               <div className={`prog ${pct >= 90 ? "danger" : pct >= 75 ? "warn" : ""}`}><div className="bar" style={{ width: pct + "%" }}/></div>
             </Card>
           );
         })}
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        <Card title="Need more capacity?">
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <div style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Request an upgrade or talk to your platform administrator.</div>
-            <div className="row" style={{ gap: 8 }}>
-              <Button variant="secondary" size="sm" icon="mail">Contact administrator</Button>
-              <Button variant="primary" size="sm" icon="sparkles">Request upgrade</Button>
-            </div>
-          </div>
-        </Card>
       </div>
     </>
   );
@@ -2827,7 +2879,7 @@ const Reports = () => {
       </div>
 
       <div className="tabs">
-        {["tickets","customers","license"].map((k) => (
+        {["tickets","customers"].map((k) => (
           <button key={k} className={`tab ${tab===k?"active":""}`} onClick={() => setTab(k)}>{k[0].toUpperCase() + k.slice(1)}</button>
         ))}
       </div>
@@ -2882,10 +2934,8 @@ const Reports = () => {
             </Card>
           </div>
         </>
-      ) : tab === "customers" ? (
-        <CustomersReport/>
       ) : (
-        <LicenseReport/>
+        <CustomersReport/>
       )}
     </>
   );
@@ -2953,75 +3003,6 @@ const CustomersReport = () => {
 };
 
 // ═══ License report ═════════════════════════════════════════════════════════
-const LicenseReport = () => {
-  const { data } = useTenant();
-  const l = data.license;
-  const dims = [
-    { key: "customers", label: "Customers", icon: "users" },
-    { key: "tickets", label: "Tickets (period)", icon: "ticket" },
-    { key: "users", label: "Users", icon: "shield" },
-    { key: "products", label: "Products / services", icon: "box" },
-  ];
-  const overall = Math.round(dims.reduce((a, d) => a + (l[d.key].used / l[d.key].limit), 0) / dims.length * 100);
-  // Stylized ticket consumption across the billing period
-  const consumption = { labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], values: [70, 145, 240, 360, 510, 690, 880, 1020, 1180, 1290, 1380, 1420], unit: "tickets" };
-  return (
-    <>
-      <div className="stat-grid">
-        <StatCard label="Package" value={l.package} sub={l.billingPeriod}/>
-        <StatCard label="Overall utilization" value={`${overall}%`} trend={overall >= 75 ? "Approaching limits" : "Healthy headroom"} trendDir={overall >= 75 ? "up" : "flat"} sparkData={[40, 48, 55, 62, 68, 74, overall]} sparkColor={overall >= 75 ? "var(--warning)" : "var(--chart-1)"}/>
-        <StatCard label="Days remaining" value={l.daysRemaining} sub="Until renewal"/>
-        <StatCard label="Payment status" value={l.paymentStatus} sub="Auto-renew on"/>
-      </div>
-
-      <div className="banner warn" style={{ marginBottom: 16 }}>
-        <span className="icon"><Icon name="warning" size={16}/></span>
-        <div>Your <b>User allocation is at {Math.round((l.users.used / l.users.limit) * 100)}%</b> ({l.users.used} of {l.users.limit}). Consider archiving inactive users or requesting an upgrade before renewal.</div>
-      </div>
-
-      <div className="two-col-7-5" style={{ marginBottom: 16, alignItems: "start" }}>
-        <Card className="chart-card">
-          <div className="chart-title">
-            <span className="big mono">{l.tickets.used.toLocaleString()}</span>
-            <h3>tickets consumed of {l.tickets.limit.toLocaleString()} this period</h3>
-          </div>
-          <LineChart data={consumption}/>
-        </Card>
-        <Card title="Allocation usage">
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {dims.map((d) => {
-              const v = l[d.key];
-              return <ProgressBar key={d.key} value={v.used} max={v.limit} label={d.label}/>;
-            })}
-          </div>
-        </Card>
-      </div>
-
-      <Card title="Renewal summary" pad={false}>
-        <table className="tbl">
-          <thead><tr><th>Allocation</th><th style={{ textAlign: "right" }}>Used</th><th style={{ textAlign: "right" }}>Limit</th><th style={{ textAlign: "right" }}>Remaining</th><th style={{ textAlign: "right" }}>Utilization</th><th style={{ textAlign: "right" }}>Status</th></tr></thead>
-          <tbody>
-            {dims.map((d) => {
-              const v = l[d.key];
-              const pct = Math.round((v.used / v.limit) * 100);
-              return (
-                <tr key={d.key}>
-                  <td><span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 500 }}><Icon name={d.icon} size={15}/> {d.label}</span></td>
-                  <td className="mono" style={{ textAlign: "right" }}>{v.used.toLocaleString()}</td>
-                  <td className="mono" style={{ textAlign: "right", color: "var(--text-muted)" }}>{v.limit.toLocaleString()}</td>
-                  <td className="mono" style={{ textAlign: "right" }}>{(v.limit - v.used).toLocaleString()}</td>
-                  <td className="mono" style={{ textAlign: "right" }}>{pct}%</td>
-                  <td style={{ textAlign: "right" }}>{pct >= 90 ? <Badge status="suspended">Critical</Badge> : pct >= 75 ? <Badge status="warning">High</Badge> : <Badge status="active">Healthy</Badge>}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </Card>
-    </>
-  );
-};
-
 // ═══ Lightweight placeholders for routed-but-not-detailed screens ═══════════
 const PlaceholderScreen = ({ icon, title, desc }) => (
   <>
