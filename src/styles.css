@@ -1191,6 +1191,10 @@ a { color: inherit; text-decoration: none; }
 .tickets-table-wrap .tbl th, .tickets-table-wrap .tbl td { padding-left: 12px; padding-right: 12px; }
 .tickets-table-wrap .tbl td .chip { font-size: 11px; padding: 2px 8px; }
 
+/* Kebab menu rendered as a bordered icon button in a page header's actions */
+.page-hd .actions .kebab-btn { width: 32px; height: 32px; border: 1.5px solid var(--border); border-radius: var(--radius); color: var(--fg); }
+.page-hd .actions .kebab-btn:hover { background: var(--surface-muted); border-color: var(--border-strong); }
+
 /* Generic wrapper for any table that uses in-header sort/filter (Customers, Reps, Audit) */
 .table-menus { overflow-x: auto; }
 .table-menus .tbl thead th { position: static; }

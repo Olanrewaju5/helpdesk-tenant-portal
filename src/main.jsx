@@ -80,6 +80,7 @@ const Icon = ({ name, size = 16, stroke = 1.6, ...rest }) => {
     case "tag": return <svg {...props}><path d="m20 12-8 8a2 2 0 0 1-2.8 0L3 13.8a2 2 0 0 1-.5-1.3V5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.3.5L20 9.2a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1"/></svg>;
     case "download": return <svg {...props}><path d="M12 3v12M6 9l6 6 6-6M4 21h16"/></svg>;
     case "external": return <svg {...props}><path d="M7 17 17 7M9 7h8v8"/></svg>;
+    case "share": return <svg {...props}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>;
     case "refresh": return <svg {...props}><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>;
     case "moon": return <svg {...props}><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>;
     case "sun": return <svg {...props}><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg>;
@@ -1979,9 +1980,10 @@ const TicketDetail = ({ id }) => {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
-  const stRef = useRef(); const asRef = useRef();
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const stRef = useRef();
   useClickAway(stRef, () => setStatusOpen(false));
-  useClickAway(asRef, () => setAssignOpen(false));
 
   if (!t) return (
     <Card><EmptyState icon="ticket" title="Ticket not found" desc={`We couldn't find ${id}.`} action={<Button variant="secondary" onClick={() => navigate("/tickets")}>Back to tickets</Button>}/></Card>
@@ -2001,6 +2003,12 @@ const TicketDetail = ({ id }) => {
     toast.success(replyTab === "internal" ? "Internal note added" : "Reply sent to customer", "Updated");
   };
 
+  const changeStatus = (s) => { updateTicket(t.id, { status: s }); addAudit(`Changed status of ${t.id} to ${s}`, t.id, "updated"); setStatusOpen(false); toast.success(`Status set to ${s}`); };
+  const assignAgent = (name) => { updateTicket(t.id, { agent: name }); addAudit(name ? `Assigned ${t.id} to ${name}` : `Unassigned ${t.id}`, t.id, "assigned"); setAssignOpen(false); toast.success(name ? `Assigned to ${name}` : "Ticket unassigned"); };
+  const startEditTitle = () => { setTitleDraft(t.subject); setEditingTitle(true); };
+  const saveTitle = () => { const v = titleDraft.trim(); if (v && v !== t.subject) { updateTicket(t.id, { subject: v }); addAudit(`Renamed ${t.id} to "${v}"`, t.id, "updated"); toast.success("Ticket title updated"); } setEditingTitle(false); };
+  const copyLink = () => { try { navigator.clipboard.writeText(window.location.href); toast.success("Ticket link copied to clipboard.", "Shared"); } catch (e) { toast.info("Copy the page URL to share this ticket."); } };
+
   return (
     <>
       <div className="crumbs">
@@ -2009,41 +2017,45 @@ const TicketDetail = ({ id }) => {
 
       <div className="page-hd" style={{ alignItems: "flex-start" }}>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div className="row" style={{ gap: 8, marginBottom: 4 }}>
+          <div className="row" style={{ gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
             <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: "var(--text-muted)" }}>{t.id}</span>
-            <Badge status={t.status}>{t.status}</Badge>
+            <div style={{ position: "relative", display: "inline-flex" }} ref={stRef}>
+              <button onClick={() => setStatusOpen((o) => !o)} title="Click to change status" style={{ background: "none", border: 0, padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3 }}>
+                <Badge status={t.status}>{t.status}</Badge>
+                <Icon name="chevron-down" size={12} stroke={2} style={{ color: "var(--text-muted)" }}/>
+              </button>
+              {statusOpen ? (
+                <div className="dropdown" style={{ left: 0, top: "100%", marginTop: 6, minWidth: 170 }}>
+                  <div className="dropdown-hd">Set status</div>
+                  {STATUS_LIST.map((s) => (
+                    <div key={s} className={`ddi ${s === t.status ? "sel" : ""}`} onClick={() => changeStatus(s)}><Badge status={s}>{s}</Badge></div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <Badge status={t.priority}>{t.priority}</Badge>
             {t.severity ? <Badge status={t.severity}>Severity: {t.severity}</Badge> : null}
           </div>
-          <h1 style={{ marginTop: 2 }}>{t.subject}</h1>
+          {editingTitle ? (
+            <input autoFocus value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)} onBlur={saveTitle}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveTitle(); } if (e.key === "Escape") setEditingTitle(false); }}
+              style={{ width: "100%", maxWidth: 640, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", border: "1.5px solid var(--border-strong)", borderRadius: 8, padding: "4px 10px", outline: "none", fontFamily: "inherit", color: "var(--fg)" }}/>
+          ) : (
+            <h1 style={{ marginTop: 2, cursor: "text", display: "inline-flex", alignItems: "center", gap: 8 }} onClick={startEditTitle} title="Click to edit title">
+              {t.subject}
+              <Icon name="edit" size={15} stroke={1.7} style={{ color: "var(--text-subtle)" }}/>
+            </h1>
+          )}
         </div>
         <div className="actions" style={{ flexShrink: 0 }}>
-          <div style={{ position: "relative" }} ref={stRef}>
-            <Button variant="secondary" iconRight="chevron-down" size="sm" onClick={() => setStatusOpen((o) => !o)}>Update status</Button>
-            {statusOpen ? (
-              <div className="dropdown" style={{ right: 0, top: "100%", marginTop: 4 }}>
-                {STATUS_LIST.map((s) => (
-                  <div key={s} className={`ddi ${s === t.status ? "sel" : ""}`} onClick={() => { updateTicket(t.id, { status: s }); addAudit(`Changed status of ${t.id} to ${s}`, t.id, "updated"); setStatusOpen(false); toast.success(`Status set to ${s}`); }}>
-                    <Badge status={s}>{s}</Badge>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <div style={{ position: "relative" }} ref={asRef}>
-            <Button variant="secondary" iconRight="chevron-down" size="sm" onClick={() => setAssignOpen((o) => !o)}>Assign agent</Button>
-            {assignOpen ? (
-              <div className="dropdown" style={{ right: 0, top: "100%", marginTop: 4, minWidth: 220 }}>
-                <div className="ddi" onClick={() => { updateTicket(t.id, { agent: null }); addAudit(`Unassigned ${t.id}`, t.id, "assigned"); setAssignOpen(false); toast.success("Ticket unassigned"); }}>Unassigned</div>
-                {data.agents.map((a) => (
-                  <div key={a.email} className={`ddi ${a.name === t.agent ? "sel" : ""}`} onClick={() => { updateTicket(t.id, { agent: a.name }); addAudit(`Assigned ${t.id} to ${a.name}`, t.id, "assigned"); setAssignOpen(false); toast.success(`Assigned to ${a.name}`); }}>
-                    <Avatar name={a.name} size="sm"/><span>{a.name}</span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <Button variant="destructive" icon="archive" size="sm" onClick={() => setArchiveOpen(true)}>Archive</Button>
+          <Button variant="secondary" size="sm" icon="share" onClick={copyLink}>Share</Button>
+          <KebabMenu items={[
+            { label: "Edit title", icon: "edit", onClick: startEditTitle },
+            { label: "Assign agent", icon: "user", onClick: () => setAssignOpen(true) },
+            { label: "Copy link", icon: "external", onClick: copyLink },
+            { sep: true },
+            { label: "Archive ticket", icon: "archive", destructive: true, onClick: () => setArchiveOpen(true) },
+          ]}/>
         </div>
       </div>
 
@@ -2108,13 +2120,18 @@ const TicketDetail = ({ id }) => {
             </div>
           </div>
           <div className="side-card">
-            <div className="side-hd"><b>Metadata</b></div>
+            <div className="side-hd"><b>Description</b></div>
             <div className="side-bd">
               <dl className="dl">
                 <dt>Ticket ID</dt><dd className="mono">{t.id}</dd>
                 <dt>Created</dt><dd>{t.created}</dd>
                 <dt>Last update</dt><dd>{t.updated}</dd>
-                <dt>Agent</dt><dd>{t.agent ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Avatar name={t.agent} size="sm"/> {t.agent}</span> : <span style={{ color: "var(--text-subtle)", fontStyle: "italic" }}>Unassigned</span>}</dd>
+                <dt>Assignee</dt><dd>
+                  <button onClick={() => setAssignOpen(true)} title="Assign or reassign agent" style={{ background: "none", border: 0, padding: 0, cursor: "pointer", color: "var(--fg)", display: "inline-flex", alignItems: "center", gap: 6, font: "inherit" }}>
+                    {t.agent ? <><Avatar name={t.agent} size="sm"/> <span style={{ fontWeight: 500 }}>{t.agent}</span></> : <span style={{ color: "var(--text-subtle)", fontStyle: "italic" }}>Unassigned</span>}
+                    <Icon name="edit" size={12} stroke={1.7} style={{ color: "var(--text-subtle)" }}/>
+                  </button>
+                </dd>
                 <dt>Category</dt><dd>{t.category || "Other"}</dd>
                 <dt>Priority</dt><dd><Badge status={t.priority}>{t.priority}</Badge></dd>
                 <dt>Severity</dt><dd>{t.severity ? <Badge status={t.severity}>{t.severity}</Badge> : "—"}</dd>
@@ -2152,6 +2169,27 @@ const TicketDetail = ({ id }) => {
           <Button variant="destructive" onClick={() => { setArchiveOpen(false); updateTicket(t.id, { status: "Closed" }); addAudit(`Archived ${t.id}`, t.id, "archived"); toast.success(`${t.id} archived. You can restore it from the archive.`); navigate("/tickets"); }}>Archive ticket</Button>
         </>}>
         <p>Archived tickets are hidden from the main view but remain searchable. This action can be undone within 30 days.</p>
+      </Modal>
+
+      <Modal open={assignOpen} onClose={() => setAssignOpen(false)} title={`Assign ${t.id}`}>
+        <p>Choose an agent to handle this ticket. They'll be notified of the assignment.</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflow: "auto" }}>
+          <button onClick={() => assignAgent(null)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 10, border: "1.5px solid " + (!t.agent ? "#000" : "var(--border)"), background: !t.agent ? "#fafafa" : "#fff", cursor: "pointer", font: "inherit" }}>
+            <span style={{ width: 24, height: 24, borderRadius: 999, background: "var(--surface-muted)", display: "grid", placeItems: "center", color: "var(--text-muted)", fontSize: 12, flexShrink: 0 }}>—</span>
+            <span style={{ fontWeight: 500 }}>Unassigned</span>
+            {!t.agent ? <Icon name="check" size={15} stroke={2.2} style={{ marginLeft: "auto" }}/> : null}
+          </button>
+          {data.agents.map((a) => {
+            const sel = a.name === t.agent;
+            return (
+              <button key={a.email} onClick={() => assignAgent(a.name)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 10, border: "1.5px solid " + (sel ? "#000" : "var(--border)"), background: sel ? "#fafafa" : "#fff", cursor: "pointer", font: "inherit" }}>
+                <Avatar name={a.name} size="sm"/>
+                <span style={{ minWidth: 0 }}><span style={{ fontWeight: 500, display: "block" }}>{a.name}</span><span style={{ fontSize: 11.5, color: "var(--text-muted)" }}>{a.role}</span></span>
+                {sel ? <Icon name="check" size={15} stroke={2.2} style={{ marginLeft: "auto" }}/> : null}
+              </button>
+            );
+          })}
+        </div>
       </Modal>
     </>
   );
