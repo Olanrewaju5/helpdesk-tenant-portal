@@ -1939,7 +1939,10 @@ const TicketsList = () => {
               {pageRows.map((t) => (
                 <tr key={t.id} className="clickable" onClick={() => navigate("/tickets/" + t.id)}>
                   <td className="mono" style={{ fontWeight: 600, fontSize: 12.5 }}>{t.id}</td>
-                  <td style={{ fontWeight: 500, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.subject}</td>
+                  <td style={{ maxWidth: 230 }}>
+                    <div style={{ fontWeight: 500, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{t.subject}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.category || "General"}{t.rep ? ` · ${t.rep}` : ""}</div>
+                  </td>
                   <td>{t.customer}</td>
                   <td><span className="chip">{t.product}</span></td>
                   <td><Badge status={t.priority}>{t.priority}</Badge></td>
@@ -2317,11 +2320,24 @@ const CustomersList = () => {
   const [custProds, setCustProds] = useState([]);
   const activeProducts = data.products.filter((p) => p.status === "Active");
   const resetAddCust = () => { setNewCust({ name: "", email: "", phone: "", address: "" }); setCustProds([]); };
+  const [sort, setSort] = useState({ key: null, dir: "asc" });
+  const toggleSort = (key) => setSort((s) => s.key === key ? (s.dir === "asc" ? { key, dir: "desc" } : { key: null, dir: "asc" }) : { key, dir: "asc" });
 
   const filtered = data.customers.filter((c) =>
     (!search || c.name.toLowerCase().includes(search.toLowerCase()) || c.id.toLowerCase().includes(search.toLowerCase()))
     && (status === "All" || c.status === status)
   );
+  const SORTERS = {
+    name: (a, b) => a.name.localeCompare(b.name),
+    id: (a, b) => a.id.localeCompare(b.id),
+    status: (a, b) => a.status.localeCompare(b.status),
+    reps: (a, b) => a.reps - b.reps,
+    open: (a, b) => a.openTickets - b.openTickets,
+    created: (a, b) => parseUpdated(a.created) - parseUpdated(b.created),
+  };
+  const sorted = sort.key && SORTERS[sort.key] ? (sort.dir === "desc" ? [...filtered].sort(SORTERS[sort.key]).reverse() : [...filtered].sort(SORTERS[sort.key])) : filtered;
+  const anyFilter = search || status !== "All" || sort.key;
+  const resetFilters = () => { setSearch(""); setStatus("All"); setSort({ key: null, dir: "asc" }); };
 
   return (
     <>
@@ -2333,23 +2349,29 @@ const CustomersList = () => {
         <Button variant="primary" icon="plus" onClick={() => setAddOpen(true)}>Add Customer</Button>
       </div>
 
-      <div className="filter-bar">
-        <div className="input-wrap">
-          <span className="input-icon"><Icon name="search" size={15}/></span>
-          <input className="input has-icon" placeholder="Search customers..." value={search} onChange={(e) => setSearch(e.target.value)}/>
+      <div className="tbl-wrap table-menus">
+        <div className="tbl-toolbar">
+          <div className="input-wrap" style={{ flex: 1, maxWidth: 380 }}>
+            <span className="input-icon"><Icon name="search" size={15}/></span>
+            <input className="input has-icon" style={{ height: 36 }} placeholder="Search customers..." value={search} onChange={(e) => setSearch(e.target.value)}/>
+          </div>
+          <div className="spacer"/>
+          <span style={{ fontSize: 12.5, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{sorted.length} of {data.customers.length} customers</span>
+          {anyFilter ? <Button variant="ghost" size="sm" icon="x" onClick={resetFilters}>Reset</Button> : null}
         </div>
-        <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option>All</option><option>Active</option><option>Archived</option>
-        </select>
-      </div>
-
-      <div className="tbl-wrap">
         <table className="tbl">
           <thead><tr>
-            <th>Customer</th><th>Code</th><th>Status</th><th>Reps</th><th>Open Tickets</th><th>Products</th><th>Created</th><th></th>
+            <th><Th label="Customer" sortKey="name" sort={sort} onSort={toggleSort}/></th>
+            <th><Th label="Code" sortKey="id" sort={sort} onSort={toggleSort}/></th>
+            <th><Th label="Status" sortKey="status" sort={sort} onSort={toggleSort} filter={{ value: status, set: setStatus, all: "All", options: ["All", "Active", "Archived"] }}/></th>
+            <th><Th label="Reps" sortKey="reps" sort={sort} onSort={toggleSort}/></th>
+            <th><Th label="Open Tickets" sortKey="open" sort={sort} onSort={toggleSort}/></th>
+            <th>Products</th>
+            <th><Th label="Created" sortKey="created" sort={sort} onSort={toggleSort}/></th>
+            <th></th>
           </tr></thead>
           <tbody>
-            {filtered.map((c) => (
+            {sorted.map((c) => (
               <tr key={c.id} className={`clickable ${c.status === "Archived" ? "archived-row" : ""}`} onClick={() => navigate("/customers/" + c.id)}>
                 <td style={{ fontWeight: 600 }}>{c.name}</td>
                 <td className="mono" style={{ fontSize: 12.5, color: "var(--text-muted)" }}>{c.id}</td>
@@ -3057,6 +3079,8 @@ const RepsScreenReal = () => {
   const [customer, setCustomer] = useState("All");
   const [status, setStatus] = useState("All");
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [sort, setSort] = useState({ key: null, dir: "asc" });
+  const toggleSort = (key) => setSort((s) => s.key === key ? (s.dir === "asc" ? { key, dir: "desc" } : { key: null, dir: "asc" }) : { key, dir: "asc" });
 
   const filtered = REPS.filter((r) => {
     if (search && !(r.name.toLowerCase().includes(search.toLowerCase()) || r.email.toLowerCase().includes(search.toLowerCase()))) return false;
@@ -3064,6 +3088,17 @@ const RepsScreenReal = () => {
     if (status !== "All" && r.status !== status) return false;
     return true;
   });
+  const SORTERS = {
+    name: (a, b) => a.name.localeCompare(b.name),
+    customer: (a, b) => a.customer.localeCompare(b.customer),
+    open: (a, b) => a.openTickets - b.openTickets,
+    total: (a, b) => a.totalTickets - b.totalTickets,
+    active: (a, b) => parseUpdated(a.lastActive) - parseUpdated(b.lastActive),
+    status: (a, b) => a.status.localeCompare(b.status),
+  };
+  const sorted = sort.key && SORTERS[sort.key] ? (sort.dir === "desc" ? [...filtered].sort(SORTERS[sort.key]).reverse() : [...filtered].sort(SORTERS[sort.key])) : filtered;
+  const anyFilter = search || customer !== "All" || status !== "All" || sort.key;
+  const resetFilters = () => { setSearch(""); setCustomer("All"); setStatus("All"); setSort({ key: null, dir: "asc" }); };
 
   return (
     <>
@@ -3085,30 +3120,32 @@ const RepsScreenReal = () => {
         <StatCard label="New this month" value="2" trend="↑ 50% vs last" trendDir="up" sparkColor="var(--chart-2)"/>
       </div>
 
-      <div className="filter-bar">
-        <div className="input-wrap">
-          <span className="input-icon"><Icon name="search" size={15}/></span>
-          <input className="input has-icon" placeholder="Search by name or email..." value={search} onChange={(e) => setSearch(e.target.value)}/>
+      <div className="tbl-wrap table-menus">
+        <div className="tbl-toolbar">
+          <div className="input-wrap" style={{ flex: 1, maxWidth: 380 }}>
+            <span className="input-icon"><Icon name="search" size={15}/></span>
+            <input className="input has-icon" style={{ height: 36 }} placeholder="Search by name or email..." value={search} onChange={(e) => setSearch(e.target.value)}/>
+          </div>
+          <div className="spacer"/>
+          <span style={{ fontSize: 12.5, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{sorted.length} of {REPS.length} reps</span>
+          {anyFilter ? <Button variant="ghost" size="sm" icon="x" onClick={resetFilters}>Reset</Button> : null}
         </div>
-        <select className="select" value={customer} onChange={(e) => setCustomer(e.target.value)}>
-          <option>All</option>
-          {data.customers.map((c) => <option key={c.id}>{c.name}</option>)}
-        </select>
-        <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option>All</option><option>Active</option><option>Archived</option>
-        </select>
-      </div>
-
-      <div className="tbl-wrap">
-        {filtered.length === 0 ? (
-          <EmptyState icon="users" title="No representatives match" desc="Try adjusting your filters or invite a new representative."/>
+        {sorted.length === 0 ? (
+          <EmptyState icon="users" title="No representatives match" desc="Try adjusting your filters or invite a new representative." action={<Button variant="secondary" onClick={resetFilters}>Clear filters</Button>}/>
         ) : (
           <table className="tbl">
             <thead><tr>
-              <th>Name</th><th>Customer</th><th>Email</th><th>Phone</th><th>Open</th><th>Total</th><th>Last active</th><th>Status</th><th></th>
+              <th><Th label="Name" sortKey="name" sort={sort} onSort={toggleSort}/></th>
+              <th><Th label="Customer" sortKey="customer" sort={sort} onSort={toggleSort} filter={{ value: customer, set: setCustomer, all: "All", options: ["All", ...data.customers.map((c) => c.name)] }}/></th>
+              <th>Email</th><th>Phone</th>
+              <th><Th label="Open" sortKey="open" sort={sort} onSort={toggleSort}/></th>
+              <th><Th label="Total" sortKey="total" sort={sort} onSort={toggleSort}/></th>
+              <th><Th label="Last active" sortKey="active" sort={sort} onSort={toggleSort}/></th>
+              <th><Th label="Status" sortKey="status" sort={sort} onSort={toggleSort} filter={{ value: status, set: setStatus, all: "All", options: ["All", "Active", "Archived"] }}/></th>
+              <th></th>
             </tr></thead>
             <tbody>
-              {filtered.map((r) => (
+              {sorted.map((r) => (
                 <tr key={r.id} className={r.status === "Archived" ? "archived-row" : ""}>
                   <td><span style={{ display: "inline-flex", alignItems: "center", gap: 10, fontWeight: 500 }}><Avatar name={r.name} size="sm"/> <div><div>{r.name}</div><div className="mono" style={{ fontSize: 11, color: "var(--text-subtle)" }}>{r.id}</div></div></span></td>
                   <td><a onClick={() => navigate("/customers/" + r.customerId)} style={{ cursor: "pointer", fontWeight: 500, textDecoration: "underline", textUnderlineOffset: 2 }}>{r.customer}</a></td>
@@ -3734,6 +3771,7 @@ const AUDIT_TYPES = {
   security:  { label: "Security",  cls: "badge-high" },
 };
 const auditMeta = (type) => AUDIT_TYPES[type] || AUDIT_TYPES.updated;
+const auditTsParse = (s = "") => { const [d, t] = s.split(", "); const dt = new Date(`${d} ${t || ""}`); return isNaN(dt.getTime()) ? 0 : dt.getTime(); };
 
 const AuditTrail = () => {
   const { data } = useTenant();
@@ -3743,6 +3781,8 @@ const AuditTrail = () => {
   const [actor, setActor] = useState("all");
   const [page, setPage] = useState(1);
   const [detail, setDetail] = useState(null);
+  const [sort, setSort] = useState({ key: null, dir: "asc" });
+  const toggleSort = (key) => setSort((s) => s.key === key ? (s.dir === "asc" ? { key, dir: "desc" } : { key: null, dir: "asc" }) : { key, dir: "asc" });
   const perPage = 8;
 
   const actors = useMemo(() => Array.from(new Set(data.audit.map((a) => a.actor))), [data.audit]);
@@ -3753,9 +3793,23 @@ const AuditTrail = () => {
     return true;
   }), [data.audit, type, actor, q]);
 
-  useEffect(() => { setPage(1); }, [type, actor, q]);
-  const totalPages = Math.max(1, Math.ceil(rows.length / perPage));
-  const pageRows = rows.slice((page - 1) * perPage, page * perPage);
+  const AUDIT_SORTERS = {
+    ts: (a, b) => auditTsParse(a.ts) - auditTsParse(b.ts),
+    actor: (a, b) => a.actor.localeCompare(b.actor),
+    action: (a, b) => a.action.localeCompare(b.action),
+    type: (a, b) => a.type.localeCompare(b.type),
+  };
+  const sorted = useMemo(() => {
+    if (!sort.key || !AUDIT_SORTERS[sort.key]) return rows;
+    const arr = [...rows].sort(AUDIT_SORTERS[sort.key]);
+    return sort.dir === "desc" ? arr.reverse() : arr;
+  }, [rows, sort]);
+
+  useEffect(() => { setPage(1); }, [type, actor, q, sort]);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / perPage));
+  const pageRows = sorted.slice((page - 1) * perPage, page * perPage);
+  const anyFilter = q || type !== "all" || actor !== "all" || sort.key;
+  const resetAll = () => { setQ(""); setType("all"); setActor("all"); setSort({ key: null, dir: "asc" }); };
 
   return (
     <>
@@ -3769,27 +3823,28 @@ const AuditTrail = () => {
         </div>
       </div>
 
-      <div className="filter-bar">
-        <div className="input-wrap">
-          <span className="input-icon"><Icon name="search" size={15}/></span>
-          <input className="input has-icon" placeholder="Search by user, action or target..." value={q} onChange={(e) => setQ(e.target.value)}/>
+      <div className="tbl-wrap table-menus">
+        <div className="tbl-toolbar">
+          <div className="input-wrap" style={{ flex: 1, maxWidth: 380 }}>
+            <span className="input-icon"><Icon name="search" size={15}/></span>
+            <input className="input has-icon" style={{ height: 36 }} placeholder="Search by user, action or target..." value={q} onChange={(e) => setQ(e.target.value)}/>
+          </div>
+          <div className="spacer"/>
+          <span style={{ fontSize: 12.5, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{sorted.length} of {data.audit.length} events</span>
+          {anyFilter ? <Button variant="ghost" size="sm" icon="x" onClick={resetAll}>Reset</Button> : null}
         </div>
-        <select className="select" value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="all">All events</option>
-          {Object.keys(AUDIT_TYPES).map((k) => <option key={k} value={k}>{AUDIT_TYPES[k].label}</option>)}
-        </select>
-        <select className="select" value={actor} onChange={(e) => setActor(e.target.value)}>
-          <option value="all">All users</option>
-          {actors.map((a) => <option key={a} value={a}>{a}</option>)}
-        </select>
-      </div>
-
-      {rows.length === 0 ? (
-        <Card><EmptyState icon="history" title="No matching events" desc="Try adjusting your filters or search term." action={<Button variant="secondary" onClick={() => { setQ(""); setType("all"); setActor("all"); }}>Clear filters</Button>}/></Card>
-      ) : (
-        <div className="tbl-wrap">
+        {sorted.length === 0 ? (
+          <EmptyState icon="history" title="No matching events" desc="Try adjusting your filters or search term." action={<Button variant="secondary" onClick={resetAll}>Clear filters</Button>}/>
+        ) : (
+          <>
           <table className="tbl">
-            <thead><tr><th style={{ minWidth: 150 }}>Timestamp</th><th>User</th><th>Action</th><th>Target</th><th style={{ textAlign: "right" }}>Event</th></tr></thead>
+            <thead><tr>
+              <th style={{ minWidth: 150 }}><Th label="Timestamp" sortKey="ts" sort={sort} onSort={toggleSort}/></th>
+              <th><Th label="User" sortKey="actor" sort={sort} onSort={toggleSort} filter={{ value: actor, set: setActor, all: "all", options: [{ value: "all", label: "All users" }, ...actors.map((a) => ({ value: a, label: a }))] }}/></th>
+              <th><Th label="Action" sortKey="action" sort={sort} onSort={toggleSort}/></th>
+              <th>Target</th>
+              <th><Th label="Event" sortKey="type" sort={sort} onSort={toggleSort} filter={{ value: type, set: setType, all: "all", options: [{ value: "all", label: "All events" }, ...Object.keys(AUDIT_TYPES).map((k) => ({ value: k, label: AUDIT_TYPES[k].label }))] }}/></th>
+            </tr></thead>
             <tbody>
               {pageRows.map((a) => {
                 const m = auditMeta(a.type);
@@ -3799,15 +3854,16 @@ const AuditTrail = () => {
                     <td><span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 500, whiteSpace: "nowrap" }}><Avatar name={a.actor} size="sm"/> {a.actor}</span></td>
                     <td style={{ minWidth: 280 }}>{a.action}</td>
                     <td>{a.target ? <span className="mono" style={{ fontSize: 12 }}>{a.target}</span> : <span style={{ color: "var(--text-subtle)" }}>—</span>}</td>
-                    <td style={{ textAlign: "right" }}><span className={`badge ${m.cls}`}>{m.label}</span></td>
+                    <td><span className={`badge ${m.cls}`}>{m.label}</span></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          <Pagination page={page} totalPages={totalPages} onPage={setPage} summary={`Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, rows.length)} of ${rows.length} events`}/>
-        </div>
-      )}
+          <Pagination page={page} totalPages={totalPages} onPage={setPage} summary={`Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, sorted.length)} of ${sorted.length} events`}/>
+          </>
+        )}
+      </div>
 
       <AuditDetailModal entry={detail} onClose={() => setDetail(null)}/>
     </>

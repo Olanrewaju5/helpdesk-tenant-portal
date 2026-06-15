@@ -1191,6 +1191,10 @@ a { color: inherit; text-decoration: none; }
 .tickets-table-wrap .tbl th, .tickets-table-wrap .tbl td { padding-left: 12px; padding-right: 12px; }
 .tickets-table-wrap .tbl td .chip { font-size: 11px; padding: 2px 8px; }
 
+/* Generic wrapper for any table that uses in-header sort/filter (Customers, Reps, Audit) */
+.table-menus { overflow-x: auto; }
+.table-menus .tbl thead th { position: static; }
+
 /* Collapsible sidebar group (Settings) */
 .nav-group { display: flex; flex-direction: column; gap: 1px; margin: 1px 0 3px 17px; padding-left: 9px; border-left: 1px solid var(--sidebar-border); }
 .nav-item.sub { padding: 8px 10px; font-size: 13px; }
