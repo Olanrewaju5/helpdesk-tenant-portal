@@ -133,6 +133,8 @@ const statusClass = (s) => {
   if (k === "high" || k === "high priority") return "badge-high";
   if (k === "medium" || k === "medium priority") return "badge-medium";
   if (k === "low" || k === "low priority") return "badge-low";
+  if (k === "minor") return "badge-low";
+  if (k === "major") return "badge-high";
   if (k === "critical") return "badge-critical";
   if (k === "unpaid") return "badge-unpaid";
   if (k === "trial") return "badge-trial";
@@ -1259,13 +1261,25 @@ const sourceFor = (a) => {
 
 const STATUS_LIST = ["New", "Open", "In Progress", "Pending Customer", "Resolved", "Closed"];
 const PRIORITY_LIST = ["Low", "Medium", "High", "Critical"];
+// Severity is the customer-impact scale, distinct from operational priority.
+const SEVERITY_LIST = ["Critical", "High", "Medium", "Minor"];
+const SEVERITY_BY_ID = {
+  "TKT-1042": "High", "TKT-1041": "Critical", "TKT-1040": "Minor", "TKT-1039": "Medium",
+  "TKT-1038": "Critical", "TKT-1037": "High", "TKT-1036": "Minor", "TKT-1035": "Medium",
+  "TKT-1034": "High", "TKT-1033": "High", "TKT-1032": "Minor", "TKT-1031": "Minor",
+};
+// Seed severity onto the static ticket data without editing every record.
+const seedTenant = () => ({
+  ...TENANT,
+  tickets: TENANT.tickets.map((t) => ({ ...t, severity: t.severity || SEVERITY_BY_ID[t.id] || "Medium" })),
+});
 
 // Tenant store — single useState shared via context
 const TenantCtx = React.createContext(null);
 const useTenant = () => React.useContext(TenantCtx);
 
 const TenantStoreProvider = ({ children }) => {
-  const [data, setData] = useState(TENANT);
+  const [data, setData] = useState(seedTenant);
   const [role, setRole] = useState("Client Administrator");
   const [emptyMode, setEmptyMode] = useState(false);
 
@@ -1454,17 +1468,23 @@ const TENANT_NAV = [
   { key: "customers", label: "Customers", icon: "users", route: "/customers" },
   { key: "products", label: "Products & Services", icon: "box", route: "/products" },
   { key: "reps", label: "Customer Representatives", icon: "people", route: "/reps" },
-  { key: "users", label: "Users & Roles", icon: "shield", route: "/users" },
-  { key: "hierarchy", label: "Team Hierarchy", icon: "org", route: "/hierarchy" },
   { key: "forms", label: "Ticket Forms", icon: "form", route: "/forms" },
   { key: "reports", label: "Reports", icon: "chart", route: "/reports" },
   { key: "audit", label: "Audit Trail", icon: "history", route: "/audit" },
-  { key: "license", label: "License Usage", icon: "gauge", route: "/license" },
-  { key: "settings", label: "Settings", icon: "settings", route: "/settings" },
+  { key: "settings", label: "Settings", icon: "settings", route: "/settings", children: [
+    { key: "settings-general", label: "General", icon: "settings", route: "/settings" },
+    { key: "users", label: "Users & Roles", icon: "shield", route: "/users" },
+    { key: "hierarchy", label: "Team Hierarchy", icon: "org", route: "/hierarchy" },
+    { key: "license", label: "License Usage", icon: "gauge", route: "/license" },
+  ] },
 ];
+
+// Flattened leaf list (used when the sidebar is collapsed to icons only).
+const TENANT_NAV_FLAT = TENANT_NAV.flatMap((it) => it.children ? it.children : [it]);
 
 const Sidebar = ({ route, navigate, collapsed, onToggle }) => {
   const { data, role, setRole } = useTenant();
+  const [openGroups, setOpenGroups] = useState({});
   return (
     <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
       <div className="sidebar-brand">
@@ -1475,16 +1495,44 @@ const Sidebar = ({ route, navigate, collapsed, onToggle }) => {
         </button>
       </div>
       <nav className="sidebar-nav">
-        {TENANT_NAV.map((it) => {
-          const active = route.startsWith(it.route);
-          return (
-            <a key={it.key} className={`nav-item ${active ? "active" : ""}`} onClick={() => navigate(it.route)}>
-              <Icon name={it.icon} size={17} stroke={1.7}/>
-              <span className="sidebar-label">{it.label}</span>
-              {it.key === "tickets" && !collapsed ? <span className="nav-badge">7</span> : null}
-            </a>
-          );
-        })}
+        {collapsed
+          ? TENANT_NAV_FLAT.map((it) => (
+              <a key={it.key} className={`nav-item ${route.startsWith(it.route) ? "active" : ""}`} onClick={() => navigate(it.route)} title={it.label}>
+                <Icon name={it.icon} size={17} stroke={1.7}/>
+              </a>
+            ))
+          : TENANT_NAV.map((it) => {
+              if (it.children) {
+                const childActive = it.children.some((c) => route.startsWith(c.route));
+                const expanded = openGroups[it.key] !== undefined ? openGroups[it.key] : childActive;
+                return (
+                  <div key={it.key}>
+                    <a className={`nav-item ${childActive && !expanded ? "active" : ""}`} onClick={() => setOpenGroups((g) => ({ ...g, [it.key]: !expanded }))}>
+                      <Icon name={it.icon} size={17} stroke={1.7}/>
+                      <span className="sidebar-label">{it.label}</span>
+                      <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} style={{ marginLeft: "auto", opacity: 0.7 }}/>
+                    </a>
+                    {expanded ? (
+                      <div className="nav-group">
+                        {it.children.map((c) => (
+                          <a key={c.key} className={`nav-item sub ${route.startsWith(c.route) ? "active" : ""}`} onClick={() => navigate(c.route)}>
+                            <Icon name={c.icon} size={15} stroke={1.7}/>
+                            <span className="sidebar-label">{c.label}</span>
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+              return (
+                <a key={it.key} className={`nav-item ${route.startsWith(it.route) ? "active" : ""}`} onClick={() => navigate(it.route)}>
+                  <Icon name={it.icon} size={17} stroke={1.7}/>
+                  <span className="sidebar-label">{it.label}</span>
+                  {it.key === "tickets" ? <span className="nav-badge">7</span> : null}
+                </a>
+              );
+            })}
       </nav>
       <div className="sidebar-foot">
         <Avatar name={data.workspace.name} size="md" style={{ background: "rgba(255,255,255,0.12)", color: "var(--sidebar-fg)", border: "1px solid var(--sidebar-border)" }}/>
@@ -1729,6 +1777,7 @@ const TicketsList = () => {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All");
   const [priority, setPriority] = useState("All");
+  const [severity, setSeverity] = useState("All");
   const [customer, setCustomer] = useState("All");
   const [agentFilter, setAgentFilter] = useState("All");
   const [page, setPage] = useState(1);
@@ -1739,12 +1788,28 @@ const TicketsList = () => {
       if (search && !(t.id.toLowerCase().includes(search.toLowerCase()) || t.subject.toLowerCase().includes(search.toLowerCase()) || t.customer.toLowerCase().includes(search.toLowerCase()))) return false;
       if (status !== "All" && t.status !== status) return false;
       if (priority !== "All" && t.priority !== priority) return false;
+      if (severity !== "All" && t.severity !== severity) return false;
       if (customer !== "All" && t.customer !== customer) return false;
       if (agentFilter === "Unassigned" && t.agent) return false;
       if (agentFilter !== "All" && agentFilter !== "Unassigned" && t.agent !== agentFilter) return false;
       return true;
     });
-  }, [data.tickets, search, status, priority, customer, agentFilter]);
+  }, [data.tickets, search, status, priority, severity, customer, agentFilter]);
+
+  // Summary counts for the stat-card strip (Total + per-status)
+  const summary = useMemo(() => {
+    const c = (s) => data.tickets.filter((t) => t.status === s).length;
+    return [
+      { label: "Total tickets", status: "All", count: data.tickets.length, dot: "#000" },
+      { label: "Open", status: "Open", count: c("Open"), dot: "#5b21b6" },
+      { label: "In progress", status: "In Progress", count: c("In Progress"), dot: "#92400e" },
+      { label: "Pending", status: "Pending Customer", count: c("Pending Customer"), dot: "#c2410c" },
+      { label: "Resolved", status: "Resolved", count: c("Resolved"), dot: "#00713a" },
+      { label: "Closed", status: "Closed", count: c("Closed"), dot: "#374151" },
+    ];
+  }, [data.tickets]);
+  const anyFilter = search || status !== "All" || priority !== "All" || severity !== "All" || customer !== "All" || agentFilter !== "All";
+  const resetFilters = () => { setSearch(""); setStatus("All"); setPriority("All"); setSeverity("All"); setCustomer("All"); setAgentFilter("All"); setPage(1); };
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER));
   const pageRows = filtered.slice((page - 1) * PER, page * PER);
@@ -1762,6 +1827,15 @@ const TicketsList = () => {
         </div>
       </div>
 
+      <div className="ticket-stats">
+        {summary.map((s) => (
+          <button key={s.label} className={`tk-stat ${status === s.status ? "active" : ""}`} onClick={() => { setStatus(s.status); setPage(1); }}>
+            <div className="tk-stat-val">{s.count}</div>
+            <div className="tk-stat-lbl"><span className="tk-dot" style={{ background: s.dot }}/> {s.label}</div>
+          </button>
+        ))}
+      </div>
+
       <div className="filter-bar">
         <div className="input-wrap">
           <span className="input-icon"><Icon name="search" size={15}/></span>
@@ -1773,6 +1847,9 @@ const TicketsList = () => {
         <select className="select" value={priority} onChange={(e) => { setPriority(e.target.value); setPage(1); }}>
           <option>All</option>{PRIORITY_LIST.map((p) => <option key={p}>{p}</option>)}
         </select>
+        <select className="select" value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(1); }}>
+          <option value="All">All severities</option>{SEVERITY_LIST.map((s) => <option key={s}>{s}</option>)}
+        </select>
         <select className="select" value={customer} onChange={(e) => { setCustomer(e.target.value); setPage(1); }}>
           <option>All customers</option>{data.customers.filter((c) => c.status === "Active").map((c) => <option key={c.id}>{c.name}</option>)}
         </select>
@@ -1781,18 +1858,18 @@ const TicketsList = () => {
           <option>Unassigned</option>
           {data.agents.map((a) => <option key={a.email}>{a.name}</option>)}
         </select>
-        {(search || status !== "All" || priority !== "All" || customer !== "All" || agentFilter !== "All") ? (
-          <Button variant="ghost" size="sm" icon="x" onClick={() => { setSearch(""); setStatus("All"); setPriority("All"); setCustomer("All"); setAgentFilter("All"); }}>Reset</Button>
+        {anyFilter ? (
+          <Button variant="ghost" size="sm" icon="x" onClick={resetFilters}>Reset</Button>
         ) : null}
       </div>
 
       <div className="tbl-wrap">
         {pageRows.length === 0 ? (
-          <EmptyState icon="search" title="No tickets match your filters" desc="Try adjusting your filters or search terms." action={<Button variant="secondary" onClick={() => { setSearch(""); setStatus("All"); setPriority("All"); setCustomer("All"); setAgentFilter("All"); }}>Clear filters</Button>}/>
+          <EmptyState icon="search" title="No tickets match your filters" desc="Try adjusting your filters or search terms." action={<Button variant="secondary" onClick={resetFilters}>Clear filters</Button>}/>
         ) : (
           <table className="tbl">
             <thead><tr>
-              <th>Ticket</th><th>Subject</th><th>Customer</th><th>Product</th><th>Priority</th><th>Status</th><th>Agent</th><th>Updated</th><th></th>
+              <th>Ticket</th><th>Subject</th><th>Customer</th><th>Product</th><th>Priority</th><th>Severity</th><th>Status</th><th>Agent</th><th>Updated</th><th></th>
             </tr></thead>
             <tbody>
               {pageRows.map((t) => (
@@ -1802,6 +1879,7 @@ const TicketsList = () => {
                   <td>{t.customer}</td>
                   <td><span className="chip">{t.product}</span></td>
                   <td><Badge status={t.priority}>{t.priority}</Badge></td>
+                  <td><Badge status={t.severity}>{t.severity}</Badge></td>
                   <td><Badge status={t.status}>{t.status}</Badge></td>
                   <td>{t.agent ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Avatar name={t.agent} size="sm"/> <span style={{ fontSize: 13 }}>{t.agent.split(" ")[0]}</span></span> : <span style={{ color: "var(--text-subtle)", fontStyle: "italic", fontSize: 13 }}>Unassigned</span>}</td>
                   <td className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>{t.updated.split(" ").slice(0, 3).join(" ")}</td>
@@ -1870,6 +1948,7 @@ const TicketDetail = ({ id }) => {
             <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: "var(--text-muted)" }}>{t.id}</span>
             <Badge status={t.status}>{t.status}</Badge>
             <Badge status={t.priority}>{t.priority}</Badge>
+            {t.severity ? <Badge status={t.severity}>Severity: {t.severity}</Badge> : null}
           </div>
           <h1 style={{ marginTop: 2 }}>{t.subject}</h1>
         </div>
@@ -1973,6 +2052,7 @@ const TicketDetail = ({ id }) => {
                 <dt>Agent</dt><dd>{t.agent ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Avatar name={t.agent} size="sm"/> {t.agent}</span> : <span style={{ color: "var(--text-subtle)", fontStyle: "italic" }}>Unassigned</span>}</dd>
                 <dt>Category</dt><dd>{t.category || "Other"}</dd>
                 <dt>Priority</dt><dd><Badge status={t.priority}>{t.priority}</Badge></dd>
+                <dt>Severity</dt><dd>{t.severity ? <Badge status={t.severity}>{t.severity}</Badge> : "—"}</dd>
               </dl>
             </div>
           </div>
@@ -2017,7 +2097,7 @@ const CreateTicket = () => {
   const { data, addTicket } = useTenant();
   const toast = useToast();
   const navigate = (to) => { window.location.hash = to; };
-  const [form, setForm] = useState({ customer: "", product: "", subject: "", description: "", priority: "Medium", category: "", agent: "" });
+  const [form, setForm] = useState({ customer: "", product: "", subject: "", description: "", priority: "Medium", severity: "Medium", category: "", agent: "" });
   const [errs, setErrs] = useState({});
 
   const validate = () => {
@@ -2036,7 +2116,7 @@ const CreateTicket = () => {
     const id = "TKT-" + (1043 + Math.floor(Math.random() * 100));
     addTicket({
       id, subject: form.subject, customer: form.customer, customerId: data.customers.find((c) => c.name === form.customer)?.id,
-      product: form.product, priority: form.priority, status: "New", agent: form.agent || null,
+      product: form.product, priority: form.priority, severity: form.severity, status: "New", agent: form.agent || null,
       rep: "Aminu Bello", category: form.category, created: `${fmtDate(new Date())} ${fmtTime(new Date())}`, updated: `${fmtDate(new Date())} ${fmtTime(new Date())}`,
       messages: [{ kind: "agent", name: "Nnamdi Eze", role: "Client Administrator, Peerless FinTech", time: `${fmtDate(new Date())}, ${fmtTime(new Date())}`, body: form.description }],
       history: [{ time: fmtTime(new Date()), text: "Ticket created", tone: "" }],
@@ -2095,12 +2175,19 @@ const CreateTicket = () => {
             <textarea className="textarea" rows={5} placeholder="Describe the issue with as much detail as possible..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ borderColor: errs.description ? "var(--destructive)" : "" }}/>
             {errs.description ? <div style={{ color: "var(--destructive)", fontSize: 12, marginTop: 4 }}>{errs.description}</div> : null}
           </div>
-          <div className="two-col-1-1" style={{ marginTop: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginTop: 14 }}>
             <div className="field">
               <label className="label">Priority <span className="required">*</span></label>
               <select className="select" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
                 {PRIORITY_LIST.map((p) => <option key={p}>{p}</option>)}
               </select>
+            </div>
+            <div className="field">
+              <label className="label">Severity <span className="required">*</span></label>
+              <select className="select" value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}>
+                {SEVERITY_LIST.map((s) => <option key={s}>{s}</option>)}
+              </select>
+              <div className="help">Customer impact, independent of priority.</div>
             </div>
             <div className="field">
               <label className="label">Category</label>
