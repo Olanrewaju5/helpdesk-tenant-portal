@@ -2778,6 +2778,8 @@ const UsersAndRoles = () => {
       <div className="tabs">
         <button className={`tab ${tab==="users"?"active":""}`} onClick={() => setTab("users")}>Users <span className="tab-count">{data.users.length}</span></button>
         <button className={`tab ${tab==="roles"?"active":""}`} onClick={() => setTab("roles")}>Roles & permissions</button>
+        <button className={`tab ${tab==="hierarchy"?"active":""}`} onClick={() => setTab("hierarchy")}>Team hierarchy</button>
+        <button className={`tab ${tab==="reps"?"active":""}`} onClick={() => setTab("reps")}>Customer representatives <span className="tab-count">{REPS.length}</span></button>
       </div>
 
       {tab === "users" ? (
@@ -2807,8 +2809,12 @@ const UsersAndRoles = () => {
             </table>
           </div>
         </>
-      ) : (
+      ) : tab === "roles" ? (
         <RolesPanel/>
+      ) : tab === "hierarchy" ? (
+        <TeamHierarchy embedded/>
+      ) : (
+        <RepsScreenReal embedded/>
       )}
     </>
   );
@@ -3071,7 +3077,7 @@ const REPS = [
   { id: "REP-010", name: "Ade Bankole", customer: "First Merchants Co.", customerId: "FMC-004", email: "ade@firstmerchants.ng", phone: "+234 815 010 2233", openTickets: 0, totalTickets: 8, status: "Archived", created: "10 Jan 2025", lastActive: "10 Apr 2026" },
 ];
 
-const RepsScreenReal = () => {
+const RepsScreenReal = ({ embedded }) => {
   const { data } = useTenant();
   const toast = useToast();
   const navigate = (to) => { window.location.hash = to; };
@@ -3102,16 +3108,18 @@ const RepsScreenReal = () => {
 
   return (
     <>
-      <div className="page-hd">
-        <div>
-          <h1>Customer representatives</h1>
-          <p className="sub">All individual contacts across your customer accounts · {REPS.filter((r) => r.status === "Active").length} active</p>
+      {!embedded ? (
+        <div className="page-hd">
+          <div>
+            <h1>Customer representatives</h1>
+            <p className="sub">All individual contacts across your customer accounts · {REPS.filter((r) => r.status === "Active").length} active</p>
+          </div>
+          <div className="actions">
+            <Button variant="ghost" icon="download" size="sm">Export CSV</Button>
+            <Button variant="primary" icon="plus" onClick={() => setInviteOpen(true)}>Invite representative</Button>
+          </div>
         </div>
-        <div className="actions">
-          <Button variant="ghost" icon="download" size="sm">Export CSV</Button>
-          <Button variant="primary" icon="plus" onClick={() => setInviteOpen(true)}>Invite representative</Button>
-        </div>
-      </div>
+      ) : null}
 
       <div className="stat-grid" style={{ marginBottom: 20 }}>
         <StatCard label="Total representatives" value={REPS.length} sub="Across all customers"/>
@@ -3129,6 +3137,7 @@ const RepsScreenReal = () => {
           <div className="spacer"/>
           <span style={{ fontSize: 12.5, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{sorted.length} of {REPS.length} reps</span>
           {anyFilter ? <Button variant="ghost" size="sm" icon="x" onClick={resetFilters}>Reset</Button> : null}
+          {embedded ? <Button variant="primary" size="sm" icon="plus" onClick={() => setInviteOpen(true)}>Invite representative</Button> : null}
         </div>
         {sorted.length === 0 ? (
           <EmptyState icon="users" title="No representatives match" desc="Try adjusting your filters or invite a new representative." action={<Button variant="secondary" onClick={resetFilters}>Clear filters</Button>}/>
@@ -3963,7 +3972,7 @@ const EscalationCard = ({ t }) => {
 };
 
 // ── Team hierarchy page ──────────────────────────────────────────────────────
-const TeamHierarchy = () => {
+const TeamHierarchy = ({ embedded }) => {
   const { data } = useTenant();
   const navigate = (to) => { window.location.hash = to; };
   const ladder = data.hierarchy;
@@ -3971,12 +3980,14 @@ const TeamHierarchy = () => {
   const topDown = [...ladder].reverse();
   return (
     <>
-      <div className="page-hd">
-        <div>
-          <h1>Team hierarchy</h1>
-          <p className="sub">Your support escalation chain. Tickets move upward through these tiers.</p>
+      {!embedded ? (
+        <div className="page-hd">
+          <div>
+            <h1>Team hierarchy</h1>
+            <p className="sub">Your support escalation chain. Tickets move upward through these tiers.</p>
+          </div>
         </div>
-      </div>
+      ) : null}
       <div className="two-col-7-5" style={{ alignItems: "start" }}>
         <Card title="Escalation chain">
           <div className="org">
