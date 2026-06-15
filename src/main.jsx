@@ -2776,9 +2776,9 @@ const UsersAndRoles = ({ initialTab }) => {
       </div>
       <div className="tabs">
         <button className={`tab ${tab==="users"?"active":""}`} onClick={() => setTab("users")}>Users <span className="tab-count">{data.users.length}</span></button>
+        <button className={`tab ${tab==="reps"?"active":""}`} onClick={() => setTab("reps")}>Customer representatives <span className="tab-count">{REPS.length}</span></button>
         <button className={`tab ${tab==="roles"?"active":""}`} onClick={() => setTab("roles")}>Roles & permissions</button>
         <button className={`tab ${tab==="hierarchy"?"active":""}`} onClick={() => setTab("hierarchy")}>Team hierarchy</button>
-        <button className={`tab ${tab==="reps"?"active":""}`} onClick={() => setTab("reps")}>Customer representatives <span className="tab-count">{REPS.length}</span></button>
       </div>
 
       {tab === "users" ? (
@@ -2808,12 +2808,12 @@ const UsersAndRoles = ({ initialTab }) => {
             </table>
           </div>
         </>
+      ) : tab === "reps" ? (
+        <RepsScreenReal embedded/>
       ) : tab === "roles" ? (
         <RolesPanel/>
-      ) : tab === "hierarchy" ? (
-        <TeamHierarchy embedded/>
       ) : (
-        <RepsScreenReal embedded/>
+        <TeamHierarchy embedded/>
       )}
     </>
   );
