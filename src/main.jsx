@@ -1467,14 +1467,12 @@ const TENANT_NAV = [
   { key: "tickets", label: "Tickets", icon: "ticket", route: "/tickets" },
   { key: "customers", label: "Customers", icon: "users", route: "/customers" },
   { key: "products", label: "Products & Services", icon: "box", route: "/products" },
-  { key: "reps", label: "Customer Representatives", icon: "people", route: "/reps" },
   { key: "forms", label: "Ticket Forms", icon: "form", route: "/forms" },
   { key: "reports", label: "Reports", icon: "chart", route: "/reports" },
   { key: "audit", label: "Audit Trail", icon: "history", route: "/audit" },
   { key: "settings", label: "Settings", icon: "settings", route: "/settings", children: [
     { key: "settings-general", label: "General", icon: "settings", route: "/settings" },
     { key: "users", label: "Users & Roles", icon: "shield", route: "/users" },
-    { key: "hierarchy", label: "Team Hierarchy", icon: "org", route: "/hierarchy" },
     { key: "license", label: "License Usage", icon: "gauge", route: "/license" },
   ] },
 ];
@@ -2738,10 +2736,11 @@ const ProductDetail = ({ id }) => {
 };
 
 // ═══ Users & Roles ══════════════════════════════════════════════════════════
-const UsersAndRoles = () => {
+const UsersAndRoles = ({ initialTab }) => {
   const { data, addAudit } = useTenant();
   const toast = useToast();
-  const [tab, setTab] = useState("users");
+  const [tab, setTab] = useState(initialTab || "users");
+  useEffect(() => { setTab(initialTab || "users"); }, [initialTab]);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [invite, setInvite] = useState({ name: "", email: "", role: "Support Agent" });
   return (
@@ -3734,12 +3733,12 @@ const TenantStoreInner = ({ route, t, setTweak }) => {
   else if (route === "/products") screen = <ProductsList/>;
   else if ((params = matchRoute("/products/:id", route))) screen = <ProductDetail id={params.id}/>;
   else if (route === "/users") screen = <UsersAndRoles/>;
+  else if (route === "/hierarchy") screen = <UsersAndRoles initialTab="hierarchy"/>;
+  else if (route === "/reps") screen = <UsersAndRoles initialTab="reps"/>;
   else if (route === "/license") screen = <LicenseUsage/>;
   else if (route === "/reports") screen = <Reports/>;
   else if (route === "/audit") screen = <AuditTrail/>;
-  else if (route === "/hierarchy") screen = <TeamHierarchy/>;
   else if (route === "/forms") screen = <TicketFormsReal/>;
-  else if (route === "/reps") screen = <RepsScreenReal/>;
   else if (route === "/settings") screen = <SettingsReal/>;
   else screen = <Card><EmptyState icon="search" title="Page not found" desc={`No screen for ${route}`} action={<Button variant="primary" onClick={() => { window.location.hash = "/dashboard"; }}>Back to dashboard</Button>}/></Card>;
 
