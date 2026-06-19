@@ -1481,16 +1481,19 @@ const TENANT_NAV = [
 // Flattened leaf list (used when the sidebar is collapsed to icons only).
 const TENANT_NAV_FLAT = TENANT_NAV.flatMap((it) => it.children ? it.children : [it]);
 
-const Sidebar = ({ route, navigate, collapsed, onToggle }) => {
+const Sidebar = ({ route, navigate, collapsed, onToggle, mobileOpen, onMobileClose }) => {
   const { data, role, setRole } = useTenant();
   const [openGroups, setOpenGroups] = useState({});
   return (
-    <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
+    <aside className={`sidebar ${collapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
       <div className="sidebar-brand">
         <Logo size={30}/>
         <span className="sidebar-label" style={{ flex: 1 }}>HelpDesk</span>
-        <button className="kebab-btn" onClick={onToggle} title={collapsed ? "Expand" : "Collapse"} style={{ color: "var(--sidebar-fg-muted)" }}>
+        <button className="kebab-btn sidebar-collapse-toggle" onClick={onToggle} title={collapsed ? "Expand" : "Collapse"} style={{ color: "var(--sidebar-fg-muted)" }}>
           <Icon name={collapsed ? "chevron-right" : "sidebar"} size={16}/>
+        </button>
+        <button className="kebab-btn sidebar-close-toggle" onClick={onMobileClose} title="Close menu" style={{ color: "var(--sidebar-fg-muted)" }}>
+          <Icon name="x" size={18}/>
         </button>
       </div>
       <nav className="sidebar-nav">
@@ -1571,12 +1574,13 @@ const RoleChip = () => {
   );
 };
 
-const TopBar = ({ route }) => {
+const TopBar = ({ route, onMenuClick }) => {
   const [showNotif, setShowNotif] = useState(false);
   const { data } = useTenant();
   const navigate = (to) => { window.location.hash = to; };
   return (
     <header className="topbar">
+      <button className="menu-btn" onClick={onMenuClick} aria-label="Open menu"><Icon name="menu" size={20}/></button>
       <div className="topbar-search">
         <div className="input-wrap">
           <span className="input-icon"><Icon name="search" size={15}/></span>
@@ -1603,12 +1607,15 @@ const TopBar = ({ route }) => {
 
 const TenantLayout = ({ route, children }) => {
   const [collapsed, setCollapsed] = useState(false);
-  const navigate = (to) => { window.location.hash = to; };
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const navigate = (to) => { window.location.hash = to; setMobileOpen(false); };
+  useEffect(() => { setMobileOpen(false); }, [route]);
   return (
     <div className="page">
-      <Sidebar route={route} navigate={navigate} collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}/>
+      <Sidebar route={route} navigate={navigate} collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)}/>
+      {mobileOpen ? <div className="sidebar-backdrop" onClick={() => setMobileOpen(false)}/> : null}
       <div className="main">
-        <TopBar route={route}/>
+        <TopBar route={route} onMenuClick={() => setMobileOpen(true)}/>
         <div className="main-body">{children}</div>
       </div>
     </div>
@@ -2905,7 +2912,7 @@ const LicenseUsage = () => {
         <LineChart data={consumption}/>
       </Card>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+      <div className="two-col-1-1">
         {dims.map((d) => {
           const v = l[d.key];
           const pct = Math.round((v.used / v.limit) * 100);
